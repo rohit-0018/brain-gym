@@ -1,0 +1,7 @@
+{
+  "name": "brain-gym",
+  "version": "1.0.0",
+  "description": "A daily, local-first brain training app: memory, focus, speed, learning and habits in one 15-minute session.",
+  "scripts": { "start": "node server.js" },
+  "license": "MIT"
+}

@@ -1,0 +1,4 @@
+node_modules
+.DS_Store
+# personal training data stays local
+data/*.csv

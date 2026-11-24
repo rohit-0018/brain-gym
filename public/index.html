@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.anthropic.com https://api.openai.com; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="A free daily 10-minute brain workout: memory, focus, speed, spaced repetition, and learning to spot manipulation techniques. Private, no accounts.">
 <title>Brain Gym — daily mind workout</title>
@@ -16,6 +17,7 @@
     <button data-tab="today" class="on">Today</button>
     <button data-tab="practice">Practice</button>
     <button data-tab="report">Report</button>
+    <button data-tab="coach">Coach</button>
     <button data-tab="cards">Flashcards</button>
     <button data-tab="library">Library</button>
   </nav>
@@ -23,6 +25,7 @@
 </header>
 <main id="app" tabindex="-1"></main>
 <script src="logic.js"></script>
+<script src="ai.js"></script>
 <script src="manip.js"></script>
 <script src="games.js"></script>
 <script src="app.js"></script>

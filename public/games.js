@@ -247,8 +247,14 @@ function gManip(root, finish, alive) {
       <h2 style="font-size:18px">Model reasoning</h2><p>${esc(sc.why)}</p>
       <p class="meta">${correct ? (hits.length ? `Signals you caught: ${esc(hits.slice(0, 4).join(', '))}.` : 'Compare your reasoning with the model answer above.') : 'Reasoning credit is small when the technique is wrong. Compare your reading with the model answer.'}</p>
       ${fair ? '<h2 style="font-size:18px">Test for a fair request</h2><p>Is it transparent, is the information honest, and can you say no without penalty? If all three, it is persuasion, not manipulation.</p>' : `<h2 style="font-size:18px">Tell-tale signs</h2><ul>${t.signs.map(x => `<li>${esc(x)}</li>`).join('')}</ul><h2 style="font-size:18px">Your counter-move</h2><p>${esc(t.counter)}</p>`}
-      <div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="nx">${i + 1 < picked.length ? 'Next situation' : 'Finish'}</button></div></div>`;
+      <div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="nx">${i + 1 < picked.length ? 'Next situation' : 'Finish'}</button>${AI.configured() ? '<button class="btn" id="ask">Get coach feedback on my reasoning</button>' : ''}</div>
+      ${AI.configured() ? '' : '<p class="meta">Want AI feedback on your reasoning here? Add an API key in the Coach tab (optional).</p>'}<div id="aiout" class="aiout" aria-live="polite"></div></div>`;
       $('#rv').focus(); $('#nx').onclick = () => { i++; round(); };
+      const ask = $('#ask'); if (ask) ask.onclick = async () => {
+        ask.disabled = true; const out = $('#aiout'); out.innerHTML = '<p class="meta">Thinking…</p>';
+        try { out.innerHTML = AI.mdToHtml(await AI.ask(AI.SYSTEM, [{ role: 'user', content: AI.critiquePrompt({ situation: sc.text, myAnswer: chosen.label, correctAnswer: fair ? FAIR.short : shortName(t), myReasoning: txt, modelReasoning: sc.why, wasCorrect: correct }) }], 500)); }
+        catch (e) { out.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; ask.disabled = false; }
+      };
     };
     root.querySelector('.opt').focus();
   };

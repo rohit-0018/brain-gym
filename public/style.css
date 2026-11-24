@@ -82,3 +82,9 @@ details.lib p{margin:8px 0 0 22px;color:var(--ink)}details.lib .meta{color:var(-
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
 h2.item{font:400 22px var(--serif);margin:0}
+.plain{padding-left:20px}.plain li{margin:6px 0;max-width:62ch}
+select{background:transparent;color:var(--ink);border:0;border-bottom:1px solid var(--ink);padding:10px 2px;font:18px var(--serif);width:100%;border-radius:0}
+.aiout{margin-top:16px;border-left:3px solid var(--acc);padding:2px 16px;text-align:left}.aiout p,.aiout ul{margin:8px 0}
+.chatlog{display:flex;flex-direction:column;gap:12px;margin:14px 0}.bubble{padding:12px 16px;max-width:68ch;border:1px solid var(--rule)}.bubble p,.bubble ul{margin:6px 0}
+.bubble.me{align-self:flex-end;background:var(--soft)}.bubble.ai{border-left:3px solid var(--acc)}
+.chatform{margin-top:14px}.chatform input{flex:1}

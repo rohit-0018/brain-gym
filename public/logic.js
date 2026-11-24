@@ -41,6 +41,35 @@
     return Object.keys(best).sort().map(d => best[d]);
   }
 
+
+  /* Facts about how you answer "spot the technique": what you confuse, whether you over-trust or over-suspect, how you explain, when you train.
+     Pure and local; the Coach tab shows these even with no AI key, and sends the same compact summary if you enable the AI. */
+  function coachFacts(records, nameOf, todayIso) {
+    const results = [];
+    records.filter(r => r.activity === 'manip').forEach(r => {
+      let d = {}; try { d = JSON.parse(r.detail); } catch { }
+      (Array.isArray(d.results) ? d.results : []).forEach(x => { if (x && x.id && x.tid) results.push({ ...x, ts: r.timestamp, date: r.date }); });
+    });
+    const wrong = results.filter(x => !x.correct), pairs = {};
+    wrong.forEach(x => { const k = x.tid + '>' + x.chosen; pairs[k] = (pairs[k] || 0) + 1; });
+    const topConfusions = Object.entries(pairs).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, c]) => { const [t, ch] = k.split('>'); return { actual: nameOf(t), chosen: nameOf(ch), times: c }; });
+    const words = x => (x.reason || '').trim().split(/\s+/).filter(Boolean).length;
+    const mean = a => a.length ? Math.round(avg(a) * 10) / 10 : null;
+    const parts = { morning: [], afternoon: [], evening: [], night: [] };
+    results.forEach(x => { const t = new Date(x.ts); if (isNaN(t)) return; const hr = t.getHours(); parts[hr >= 5 && hr < 12 ? 'morning' : hr < 17 && hr >= 12 ? 'afternoon' : hr >= 17 && hr < 22 ? 'evening' : 'night'].push(x.correct ? 1 : 0); });
+    const accByDaypart = {}; Object.entries(parts).forEach(([k, v]) => { if (v.length >= 5) accByDaypart[k] = Math.round(avg(v) * 100); });
+    const dates = [...new Set(records.map(r => r.date))].sort(), last14 = Array.from({ length: 14 }, (_, i) => addDays(todayIso, -i));
+    let longestGap = 0; for (let i = 1; i < dates.length; i++) { const gap = Math.round((new Date(dates[i] + 'T12:00:00') - new Date(dates[i - 1] + 'T12:00:00')) / 864e5) - 1; if (gap > longestGap) longestGap = gap; }
+    return {
+      answers: results.length, accuracyPct: results.length ? Math.round(results.filter(x => x.correct).length / results.length * 100) : null,
+      topConfusions,
+      overTrusting: wrong.filter(x => x.tid !== 'fair' && x.chosen === 'fair').length,      // called manipulation "fair"
+      overSuspicious: wrong.filter(x => x.tid === 'fair' && x.chosen !== 'fair').length,    // saw manipulation in a fair request
+      avgWordsWhenCorrect: mean(results.filter(x => x.correct).map(words)), avgWordsWhenWrong: mean(wrong.map(words)),
+      accByDaypart, daysTrainedLast14: last14.filter(d => dates.includes(d)).length, longestGapDays: longestGap, totalDays: dates.length,
+    };
+  }
+
   /* Trend: needs >= minRuns scores; compares first 3 vs latest 3 averages, +/-5% counts as steady. */
   function trendOf(scores, minRuns = 4) {
     if (scores.length < minRuns) return { trend: null, pct: 0 };
@@ -91,5 +120,5 @@
     const head = rows.shift();
     return rows.filter(r => r.length > 1).map(r => Object.fromEntries(head.map((k, i) => [k, (r[i] || '').replace(/^'([=+\-@])/, '$1')])));
   }
-  return { addDays, isoOf, avg, norm, hasKey, skillOf, dailySeries, scoreReasoning, trendOf, streakOf, sm2, csvCell, csvLine, parseCsv };
+  return { addDays, isoOf, avg, coachFacts, norm, hasKey, skillOf, dailySeries, scoreReasoning, trendOf, streakOf, sm2, csvCell, csvLine, parseCsv };
 });

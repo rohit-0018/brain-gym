@@ -79,7 +79,7 @@ function show(tab) {
   cleanup(); cleanup = () => { }; inGame = false; currentTab = tab;
   document.querySelectorAll('#nav button').forEach(b => { const on = b.dataset.tab === tab; b.classList.toggle('on', on); on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
   const app = $('#app'); app.innerHTML = '';
-  ({ today: vToday, practice: vPractice, report: vReport, cards: vCards, library: vLibrary })[tab](app);
+  ({ today: vToday, practice: vPractice, report: vReport, coach: vCoach, cards: vCards, library: vLibrary })[tab](app);
   window.scrollTo(0, 0); const hd = app.querySelector('h1'); if (hd) { hd.tabIndex = -1; hd.focus({ preventScroll: true }); }
 }
 $('#nav').onclick = e => { const t = e.target.dataset.tab; if (!t) return; if (inGame && !confirm('Leave this exercise? Anything you already finished is saved.')) return; show(t); };
@@ -230,6 +230,67 @@ function vReport(app) {
     records.sort((a, b) => a.timestamp.localeCompare(b.timestamp)); save(K.rec, records); if (serverUp) post('api/records', records);
     e.target.value = ''; show('report'); $('#dmsg').textContent = `Imported ${added} new row${added === 1 ? '' : 's'}${bad ? `, skipped ${bad} invalid` : ''}.`;
   };
+}
+
+/* ---------- coach ---------- */
+const nameOfId = id => id === 'fair' ? FAIR.short : techById(id) ? shortName(techById(id)) : String(id);
+function insightLines(f) {
+  if (f.answers < 6) return [`You have answered ${f.answers} situation${f.answers === 1 ? '' : 's'} so far. Patterns need about 6 or more, so keep going.`];
+  const L = [`Overall you name the right technique ${f.accuracyPct}% of the time (${f.answers} answers).`];
+  f.topConfusions.forEach(c => L.push(`You keep reading <b>${esc(c.actual)}</b> as <b>${esc(c.chosen)}</b> (${c.times}×). Look for the signal that separates them.`));
+  if (f.overTrusting > f.overSuspicious && f.overTrusting >= 2) L.push(`You called manipulation "fair" ${f.overTrusting} times. You may be giving people too much benefit of the doubt.`);
+  else if (f.overSuspicious > f.overTrusting && f.overSuspicious >= 2) L.push(`You saw manipulation in a fair request ${f.overSuspicious} times. Plain asks with a clear way out are not manipulation.`);
+  if (f.avgWordsWhenWrong != null && f.avgWordsWhenCorrect != null && f.avgWordsWhenWrong + 3 < f.avgWordsWhenCorrect) L.push(`Your explanations are shorter when you get it wrong (${f.avgWordsWhenWrong} vs ${f.avgWordsWhenCorrect} words). Slow down and name two specific signals before choosing.`);
+  const dp = Object.entries(f.accByDaypart).sort((a, b) => b[1] - a[1]); if (dp.length >= 2 && dp[0][1] - dp.at(-1)[1] >= 20) L.push(`You do best in the ${dp[0][0]} (${dp[0][1]}%) and worst at ${dp.at(-1)[0]} (${dp.at(-1)[1]}%).`);
+  L.push(`You trained on ${f.daysTrainedLast14} of the last 14 days${f.longestGapDays >= 3 ? `, with a longest gap of ${f.longestGapDays} days` : ''}.${f.daysTrainedLast14 < 7 ? ' Short daily sessions beat long irregular ones.' : ''}`);
+  return L;
+}
+let coachChat = [];
+function missedForCoach() {
+  const st = manipStats();
+  return Object.entries(st).filter(([, e]) => e.last === false).map(([id, e]) => ({ s: SCEN.find(x => x.id === id), e })).filter(x => x.s).sort((a, b) => b.e.date.localeCompare(a.e.date)).slice(0, 6)
+    .map(({ s, e }) => ({ situation: s.text, iChose: labelFor(e.chosen), correctAnswer: labelFor(s.t), myReasoning: e.reason || '', modelReasoning: s.why }));
+}
+function vCoach(app) {
+  const f = Logic.coachFacts(records, nameOfId, today()), cfg = AI.getCfg();
+  app.append(h(`<div><p class="eyebrow">Coach</p><h1>What is holding you back?</h1>
+  <p class="sub">First, patterns found locally in your answers. Then, optionally, an AI coach that reads your actual mistakes and explains them.</p>
+  <h2>Patterns in your answers</h2><ul class="plain">${insightLines(f).map(l => `<li>${l}</li>`).join('')}</ul>
+  <h2>AI coach <span class="chip">optional</span></h2><div id="ai"></div></div>`));
+  const box = $('#ai');
+  const privacy = `<p class="meta" style="margin-top:14px">Your key goes straight from this browser to the provider you pick. There is no server of mine in between, and it is never saved to the repo or included in CSV exports. By default it is kept for this tab only. What gets sent when you ask: the summary and missed situations shown above, with your own explanations. Journal entries and flashcards are never sent. A strict content-security policy blocks the page from contacting anything else.</p>`;
+  if (!cfg) {
+    box.innerHTML = `<form id="kf" class="aiform"><p class="sub">Bring your own API key to get feedback like "you confused reciprocity with guilt-tripping because…" and a plan for what to fix. Usage is billed to your own account (a review costs a fraction of a cent to a few cents).</p>
+    <div class="field"><label for="prov">Provider</label><select id="prov">${Object.entries(AI.PROVIDERS).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('')}</select></div>
+    <div class="field"><label for="key">API key</label><input type="password" id="key" autocomplete="off" spellcheck="false" placeholder="sk-ant-…"></div>
+    <div class="field"><label for="mdl">Model (editable)</label><input type="text" id="mdl" autocomplete="off" spellcheck="false"></div>
+    <label class="check" style="font:15px var(--sans)"><input type="checkbox" id="rem2"> Remember on this device<span class="meta" style="margin-left:6px">(not on shared computers; other sites on the same github.io address could read it)</span></label>
+    <p class="err" role="alert"></p><button class="btn primary" type="submit">Save key</button>${privacy}</form>`;
+    const sync = () => { const p = AI.PROVIDERS[$('#prov').value]; $('#mdl').value = p.model; $('#key').placeholder = p.hint; }; $('#prov').onchange = sync; sync();
+    $('#kf').onsubmit = e => { e.preventDefault(); try { AI.setCfg({ provider: $('#prov').value, key: $('#key').value, model: $('#mdl').value, remember: $('#rem2').checked }); coachChat = []; show('coach'); } catch (er) { $('.err', box).textContent = er.message; } };
+    return;
+  }
+  box.innerHTML = `<p class="meta">Connected: ${esc(AI.PROVIDERS[cfg.provider].name)} · ${esc(cfg.model)} · ${cfg.remember ? 'remembered on this device' : 'this tab only'} <button class="btn ghost" id="rmk" style="margin-left:8px;padding:4px 10px">Remove key</button> <button class="btn ghost" id="tst" style="padding:4px 10px">Test key</button></p>
+  <div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="a1">Review my week</button><button class="btn" id="a2">What is holding me back?</button><button class="btn ghost" id="a0" ${coachChat.length ? '' : 'hidden'}>Start over</button></div>
+  <div id="log" class="chatlog" aria-live="polite"></div><p class="err" role="alert" id="aerr"></p>
+  <form id="cf" class="chatform"><label for="cq" class="meta">Ask a follow-up</label><div style="display:flex;gap:8px"><input type="text" id="cq" autocomplete="off" placeholder="e.g. Why do I mix up guilt-tripping and reciprocity?"><button class="btn primary" type="submit">Send</button></div></form>${privacy}`;
+  const log = $('#log', box), err = $('#aerr', box);
+  const draw = (pending) => { log.innerHTML = coachChat.map(m => m.role === 'user' ? `<div class="bubble me">${esc(m.label || m.content).slice(0, 600)}</div>` : `<div class="bubble ai">${AI.mdToHtml(m.content)}</div>`).join('') + (pending ? '<div class="bubble ai meta">Thinking…</div>' : ''); };
+  const busy = on => box.querySelectorAll('button').forEach(b => { if (b.id !== 'rmk') b.disabled = on; });
+  async function send(content, label) {
+    err.textContent = ''; coachChat.push({ role: 'user', content, label }); draw(true); busy(true);
+    try { const text = await AI.ask(AI.SYSTEM, coachChat.slice(-12).map(m => ({ role: m.role, content: m.content })), 800); coachChat.push({ role: 'assistant', content: text }); }
+    catch (e) { coachChat.pop(); err.textContent = e.message; }
+    draw(false); busy(false); $('#a0', box).hidden = !coachChat.length;
+  }
+  const review = (q, label) => send(AI.reviewPrompt(f, missedForCoach(), q), label);
+  $('#a1', box).onclick = () => review('Review my week: what am I doing well, what went wrong, and what should I do next week?', 'Review my week');
+  $('#a2', box).onclick = () => review('What is holding me back from improving? Name the most important patterns and one small action for each.', 'What is holding me back?');
+  $('#a0', box).onclick = () => { coachChat = []; draw(false); $('#a0', box).hidden = true; };
+  $('#cf', box).onsubmit = e => { e.preventDefault(); const q = $('#cq', box).value.trim(); if (!q) return; $('#cq', box).value = ''; if (!coachChat.length) review(q, q); else send(q); };
+  $('#rmk', box).onclick = () => { AI.clearCfg(); coachChat = []; show('coach'); };
+  $('#tst', box).onclick = async () => { err.textContent = 'Testing…'; busy(true); try { await AI.ask('Reply with the single word OK.', [{ role: 'user', content: 'ping' }], 10); err.textContent = 'Key works.'; } catch (e) { err.textContent = e.message; } busy(false); };
+  draw(false);
 }
 
 /* ---------- library ---------- */

@@ -36,3 +36,9 @@ Streak = days with ≥3 exercises completed.
 
 ## Ideas to extend
 New games (Tower of Hanoi, word-chain, pattern logic), a weekly review, reminders, charts per game.
+
+## Influence & manipulation (defensive)
+18 techniques (Cialdini's principles, anchoring, gaslighting, DARVO, love bombing, guilt-tripping, triangulation, intermittent reinforcement, stonewalling, false dilemma, moving the goalposts, strawman) and 36 real-life situations.
+- **Technique of the day**: definition, tell-tale signs, counter-move; you add a real-life example.
+- **Spot the technique**: 3 situations per session. Name the technique, write your reasoning, get scored (60 for the right technique, 40 for the key ideas in your reasoning) and see the model answer. Techniques you miss come back more often.
+- The Report shows accuracy per technique, weakest first.

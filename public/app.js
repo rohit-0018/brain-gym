@@ -46,6 +46,8 @@ async function boot() {
 /* ---------- activities ---------- */
 const ACTS = [
   { id: 'breathe', cat: 'Calm', daily: true, track: false, icon: '', name: 'Box breathing', min: 1, tag: 'Calm · Focus', desc: '60s of 4-4-4-4 breathing lowers stress so the rest of the session works better.', run: gBreathe, unit: 's' },
+  { id: 'lesson', cat: 'Influence', daily: true, track: false, name: 'Technique of the day', min: 1, tag: 'Influence · Learn', desc: 'One manipulation or persuasion technique: how it works, how to spot it, how to counter it.', run: gLesson, unit: ' words' },
+  { id: 'manip', cat: 'Influence', daily: true, track: true, name: 'Spot the technique', min: 3, tag: 'Influence · Reasoning', desc: 'Read a real-life situation, name the technique, and explain your reasoning.', run: gManip, unit: '/100' },
   { id: 'nback', cat: 'Memory', daily: true, track: true, icon: '', name: 'Dual N-Back', min: 3, tag: 'Working memory', desc: 'Track a position AND a letter from N steps ago. Levels adapt to you.', run: gNback, unit: '%' },
   { id: 'stroop', cat: 'Focus', daily: true, track: true, icon: '', name: 'Stroop Focus', min: 1, tag: 'Attention · Inhibition', desc: 'Tap the INK colour, not the word. Trains your brain to ignore distractions.', run: gStroop, unit: '%' },
   { id: 'seq', cat: 'Memory', daily: true, track: true, icon: '', name: 'Sequence Memory', min: 2, tag: 'Visual-spatial memory', desc: 'Watch the pattern, repeat it. It grows by one each round.', run: gSeq, unit: ' len' },
@@ -56,8 +58,8 @@ const ACTS = [
   { id: 'cards', cat: 'Learning', daily: false, track: false, icon: '', name: 'Flashcards', min: 3, tag: 'Spaced repetition', desc: 'Review the cards due today (add your own in the Flashcards tab).', run: null, unit: ' cards' },
   { id: 'habits', cat: 'Habits', daily: false, track: false, icon: '', name: 'Brain habits', min: 1, tag: 'Sleep · Exercise · Reading', desc: 'Log the daily basics that matter more than any game.', run: gHabits, unit: '/6' },
 ];
-const DAILY = ['breathe', 'nback', 'stroop', 'seq', 'digits', 'math'];
-const CATS = ['Memory', 'Focus', 'Speed', 'Learning', 'Habits', 'Calm'];
+const DAILY = ['breathe', 'lesson', 'manip', 'nback', 'stroop', 'math'];
+const CATS = ['Influence', 'Memory', 'Focus', 'Speed', 'Learning', 'Habits', 'Calm'];
 const actById = id => ACTS.find(a => a.id === id);
 const doneToday = id => records.some(r => r.activity === id && r.date === today());
 const lastScore = id => { const r = [...records].reverse().find(r => r.activity === id); return r ? r.score : null; };
@@ -100,7 +102,7 @@ function vToday(app) {
   const cl = $('#cl'); if (cl) cl.onclick = e => { e.preventDefault(); show('cards'); };
 }
 
-let pickedCats = load('braingym.cats.v1', ['Memory']);
+let pickedCats = load('braingym.cats.v1', ['Influence']);
 function vPractice(app) {
   const games = () => ACTS.filter(a => a.run && pickedCats.includes(a.cat)), mins = () => games().reduce((x, a) => x + a.min, 0);
   app.append(h(`<div><p class="eyebrow">Extra reps</p><h1>Practice</h1><p class="sub">Pick one or more categories. We line up every exercise in them and run them back to back.</p>
@@ -283,6 +285,59 @@ function gHabits(root, finish) {
   $('#sv').onclick = () => { const on = [...root.querySelectorAll('input:checked')].map(c => items[c.dataset.i]); finish(on.length, { done: on }, on.length >= 5 ? 'Brain-friendly day! ' : 'Every tick counts.'); };
 }
 
+
+/* ---------- influence & manipulation ---------- */
+const dayNo = () => Math.floor(new Date(today() + 'T12:00:00') / 864e5);
+const techOfDay = () => TECH[dayNo() % TECH.length];
+const techById = id => TECH.find(t => t.id === id);
+function manipStats() {
+  const st = {}; records.filter(r => r.activity === 'manip').forEach(r => { let d = {}; try { d = JSON.parse(r.detail); } catch { } (d.results || []).forEach(x => { const e = st[x.id] ||= { n: 0, ok: 0, last: null, t: x.tid }; e.n++; e.ok += x.correct ? 1 : 0; e.last = x.correct; }); });
+  return st;
+}
+function gLesson(root, finish) {
+  const t = techOfDay();
+  root.innerHTML = `<div style="text-align:left"><p class="eyebrow">Technique ${TECH.indexOf(t) + 1} of ${TECH.length} · ${esc(t.src)}</p><h1 style="font-size:36px">${esc(t.name)}</h1>
+  <p class="serif">${esc(t.def)}</p>
+  <h2 style="font-size:18px">How to spot it</h2><ul>${t.signs.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+  <h2 style="font-size:18px">How to counter it</h2><p>${esc(t.counter)}</p>
+  <div class="field"><label>Where have you seen or felt this? (ads, work, family, media; 1-2 sentences)</label><textarea id="ex" style="min-height:90px"></textarea></div>
+  <div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="sv">Save and continue</button></div></div>`;
+  $('#sv').onclick = () => { const x = $('#ex').value.trim(), n = x ? x.split(/\s+/).length : 0; if (n < 6) return alert('Write at least a short sentence. Linking it to real life is what makes it stick.'); finish(n, { tech: t.id, text: x }, `Saved. Today you will be tested on ${t.name.split(' (')[0]} and others.`); };
+}
+
+function gManip(root, finish, alive) {
+  const st = manipStats(), tod = techOfDay();
+  const weight = sc => { const e = st[sc.id]; return (!e ? 3 : e.last === false ? 4 : 1) + Math.random() * 2; };
+  const first = pick(SCEN.filter(x => x.t === tod.id)), rest = SCEN.filter(x => x.id !== first.id).sort((a, b) => weight(b) - weight(a));
+  const picked = [first]; for (const x of rest) { if (picked.length >= 3) break; if (!picked.some(p => p.t === x.t)) picked.push(x); }
+  let i = 0; const results = [];
+  const options = sc => { const t = techById(sc.t), same = shuffle(TECH.filter(x => x.g === t.g && x.id !== t.id)).slice(0, 2), other = shuffle(TECH.filter(x => x.g !== t.g)).slice(0, 1); return shuffle([t, ...same, ...other]); };
+  const round = () => {
+    if (!alive()) return; if (i >= picked.length) return finish(Math.round(avg(results.map(r => r.pts))), { results }, `${results.filter(r => r.correct).length} of ${results.length} techniques named correctly.`);
+    const sc = picked[i], opts = options(sc); let chosen = null;
+    root.innerHTML = `<div style="text-align:left"><p class="eyebrow">Situation ${i + 1} of ${picked.length}</p><p class="serif" style="font-size:22px;margin-bottom:22px">${esc(sc.text)}</p>
+    <p class="eyebrow">1 · Which technique is this?</p><div id="op" style="display:flex;flex-direction:column;gap:8px;margin-bottom:22px"></div>
+    <div class="field"><label>2 · Your reasoning: which signals in the situation tell you so?</label><textarea id="rs" placeholder="e.g. They did X first, which creates... then asked for Y..."></textarea></div>
+    <div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="sub">Submit</button></div></div>`;
+    opts.forEach(o => { const b = h(`<button class="btn" style="text-align:left">${esc(o.name)}</button>`); b.onclick = () => { chosen = o; root.querySelectorAll('#op .btn').forEach(x => x.classList.remove('primary')); b.classList.add('primary'); }; $('#op').append(b); });
+    $('#sub').onclick = () => {
+      const txt = $('#rs').value.trim(); if (!chosen) return alert('Pick a technique first.'); if (txt.split(/\s+/).length < 8) return alert('Explain your reasoning in at least a sentence or two (8+ words).');
+      const low = txt.toLowerCase(), hits = sc.keys.filter(k => low.includes(k)), correct = chosen.id === sc.t, pts = (correct ? 60 : 0) + Math.round(Math.min(hits.length, 3) / 3 * 40);
+      results.push({ id: sc.id, tid: sc.t, correct, pts }); const t = techById(sc.t);
+      root.innerHTML = `<div style="text-align:left"><p class="eyebrow" style="color:${correct ? 'var(--good)' : 'var(--acc)'}">${correct ? 'Correct' : 'Not quite'} · ${pts}/100</p>
+      <h1 style="font-size:32px">${esc(t.name)}</h1>
+      ${correct ? '' : `<p class="meta">You chose: ${esc(chosen.name)}</p>`}
+      <h2 style="font-size:18px">Model reasoning</h2><p>${esc(sc.why)}</p>
+      <p class="meta">Your reasoning touched ${Math.min(hits.length, 3)} of 3 key ideas${hits.length ? ': ' + esc(hits.slice(0, 4).join(', ')) : ''}. Compare it with the model answer above.</p>
+      <h2 style="font-size:18px">Tell-tale signs</h2><ul>${t.signs.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
+      <h2 style="font-size:18px">Your counter-move</h2><p>${esc(t.counter)}</p>
+      <div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="nx">${i + 1 < picked.length ? 'Next situation' : 'Finish'}</button></div></div>`;
+      $('#nx').onclick = () => { i++; round(); };
+    };
+  };
+  round();
+}
+
 /* ---------- flashcards (SM-2 lite) ---------- */
 function vCards(app) {
   const due = () => cards.filter(c => c.due <= today());
@@ -321,6 +376,11 @@ function spark(v) {
   return `<svg width="${w}" height="${ht}" viewBox="0 0 ${w} ${ht}"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="${last[0]}" cy="${last[1]}" r="2.6" fill="var(--acc)"/></svg>`;
 }
 const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+function techReport() {
+  const st = manipStats(), rows = TECH.filter(t => st[t.id + '-0'] || st[t.id + '-1']).map(t => { const a = [st[t.id + '-0'], st[t.id + '-1']].filter(Boolean), n = a.reduce((x, e) => x + e.n, 0), ok = a.reduce((x, e) => x + e.ok, 0); return { t, n, acc: Math.round(ok / n * 100) }; }).sort((a, b) => a.acc - b.acc);
+  if (!rows.length) return '<h2>Spotting manipulation</h2><p class="sub">No attempts yet. Do the daily session to start tracking which techniques you recognise.</p>';
+  return `<h2>Spotting manipulation</h2><p class="sub">${rows.length} of ${TECH.length} techniques seen. Weakest first: your next practice picks these more often.</p><table><tr><th>Technique</th><th>Seen</th><th>Correct</th></tr>${rows.map(r => `<tr><td>${esc(r.t.name)}</td><td>${r.n}</td><td style="color:${r.acc >= 70 ? 'var(--good)' : r.acc < 50 ? 'var(--acc)' : 'var(--mute)'}">${r.acc}%</td></tr>`).join('')}</table>`;
+}
 function vReport(app) {
   const wk = off => { const days = Array.from({ length: 7 }, (_, i) => addDays(today(), -off * 7 - i)); return records.filter(r => days.includes(r.date)); };
   const tw = wk(0), lw = wk(1);
@@ -342,6 +402,7 @@ function vReport(app) {
   <table><tr><th>Exercise</th><th>Runs</th><th>Best</th><th>Now</th><th>Trend</th><th></th></tr>${rows.map(r => `<tr><td>${r.a.name}${r.lvl ? `<br><span class="meta">${r.lvl}</span>` : ''}</td><td>${r.rs.length}</td><td>${r.sc.length ? Math.max(...r.sc) : '–'}</td><td>${r.sc.length ? r.sc.at(-1) : '–'}</td>
     <td style="color:${r.trend === 'up' ? 'var(--good)' : r.trend === 'down' ? 'var(--acc)' : 'var(--mute)'}">${r.trend ? `${label[r.trend]} ${r.pct > 0 ? '+' : ''}${r.pct.toFixed(0)}%` : r.a.track ? `<span class="meta">needs ${Math.max(0, 4 - r.sc.length)} more</span>` : '<span class="meta">log only</span>'}</td><td style="color:var(--mute)">${spark(r.sc.slice(-20))}</td></tr>`).join('')}</table>
   <p class="meta" style="margin-top:8px">Trend compares the average of your first 3 runs with your latest 3. Within ±5% counts as steady.</p>
+  ${techReport()}
   <h2>Last 14 days</h2><div class="chart" style="margin-bottom:34px">${days.map(d => `<div style="height:${cnt(d) / max * 100}%" title="${d}: ${cnt(d)}"><span>${d.slice(8)}</span></div>`).join('')}</div>
   <h2>Your data</h2><div class="row-btns" style="justify-content:flex-start"><button class="btn" id="ex">Download CSV</button><button class="btn ghost" id="imp">Import CSV</button><input type="file" id="fi" accept=".csv" hidden></div>
   <p class="sub">${serverUp ? 'Also saved automatically in <code>data/records.csv</code>.' : 'Server not running, so data is in this browser only. Run <code>npm start</code> to also write CSV files.'}</p></div>`));
@@ -363,6 +424,7 @@ function vReport(app) {
 const CHALLENGES = ['Take a different route today and notice 5 new things.', 'Learn 5 words in a language you are curious about.', 'Draw (badly!) a diagram of something you understand.', 'Play one game of chess or solve a puzzle you have never tried.', 'Write with your non-dominant hand for 2 minutes.', 'Cook a recipe you have never made without looking at your phone mid-way.', 'Ask someone an interesting question and listen for 10 minutes.', 'Read 10 pages of a book outside your usual topics.', 'Memorise a short poem or a 20-digit number using a memory palace.', 'Teach someone a concept you learned this week.', 'Go for a 30-minute walk with no podcast or music — let your mind wander.', 'Learn a card trick or a simple instrument riff.', 'Estimate the answers to 5 everyday numbers before googling them.'];
 const dailyChallenge = () => CHALLENGES[[...today()].reduce((s, c) => s + c.charCodeAt(0), 0) % CHALLENGES.length];
 const LIB = [
+  ['Influence & manipulation (defensive)', 'Influence — Robert Cialdini · The Gaslight Effect — Robin Stern · Thinking, Fast and Slow — Kahneman', 'Knowing the named patterns (reciprocity, scarcity, DARVO, gaslighting...) lets you notice them in the moment, and a named pattern is much easier to counter.', 'Technique of the day, Spot the technique'],
   ['Retrieval practice & spaced repetition', 'Make It Stick — Brown, Roediger & McDaniel · Ebbinghaus forgetting curve', 'Testing yourself beats re-reading. Spacing reviews over days multiplies retention.', 'Flashcards'],
   ['Method of Loci (Memory Palace)', 'Moonwalking with Einstein — Joshua Foer · Ancient Greek orators', 'Anchor items to places on a familiar route using vivid, absurd images. Memory champions use it.', 'Memory Palace'],
   ['Feynman Technique', 'Surely You\'re Joking, Mr. Feynman! · A Mind for Numbers — Barbara Oakley', 'Explain it simply, find the gaps, go back and learn them. Reveals the illusion of understanding.', 'Feynman Journal'],

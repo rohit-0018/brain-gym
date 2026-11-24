@@ -43,7 +43,7 @@ const TECH = [
     def: 'Deny the behaviour, Attack the person raising it, then Reverse Victim and Offender so they become the wronged one.',
     signs: ['Flat denial first', 'You end up defending yourself', 'They claim to be the real victim'],
     counter: 'Stay on the original point: "We are talking about what happened." Do not accept the role swap.' },
-  { id: 'lovebomb', g: 'B', name: 'Love bombing', src: 'Margaret Singer, Cults in Our Midst',
+  { id: 'lovebomb', g: 'B', name: 'Love bombing', src: 'Margaret Singer, Cults in Our Midst (the term comes from 1970s cult recruiting)',
     def: 'Overwhelm with affection, gifts and attention very early to create dependence, then use withdrawal as control.',
     signs: ['Intensity far ahead of real knowledge of you', '"Soulmate" talk, rushing commitment', 'Coldness or anger when you set a boundary'],
     counter: 'Slow it down. Real affection survives a normal pace and a "no". Watch how they react to limits.' },
@@ -109,7 +109,7 @@ const SCEN_RAW = [
   ['stonewall', 'After a disagreement your partner stops talking for three days, replies "I am fine" and acts cold, until you apologise.', ['silent', 'silence', 'three days', 'not talking', 'fine', 'punish', 'apolog', 'cold', 'ignore'], 'Withholding communication works as punishment and pressures you to concede.'],
   ['stonewall', 'You raise a concern in a meeting. A colleague stares, says nothing, and walks out. Later he refuses to discuss it.', ['stare', 'nothing', 'walk', 'refus', 'discuss', 'silent', 'avoid', 'engage', 'accountab'], 'Refusing to engage avoids accountability and leaves you carrying the issue alone.'],
   ['falsedilemma', 'Your boss says: "Either you are with us on this deal, or you are against the team."', ['either', 'or', 'with us', 'against', 'only two', 'option', 'middle', 'third', 'binary', 'loyal'], 'Only two options are offered, and disagreement is recast as disloyalty. There are obviously other positions.'],
-  ['falsedilemma', '"You can lend me the money or admit you do not care about me."', ['lend', 'or', 'admit', 'care', 'two', 'option', 'choice', 'only', 'binary', 'third'], 'Care is reduced to one action. Other ways to help, or to say no and still care, are hidden.'],
+  ['falsedilemma', '"You can sign the contract on these terms or walk away and lose the whole project," says the vendor, who has not discussed changing any terms.', ['sign', 'terms', 'walk away', 'lose', 'project', 'only two', 'options', 'negotiat', 'alternatives', 'binary'], 'Two options are presented as the only ones, while negotiating the terms or using another vendor is never mentioned.'],
   ['goalposts', 'Your boss: "Hit 100 sales and you get promoted." You do. "Well, we meant 150." You hit 150. "Now we also need leadership scores."', ['100', '150', 'promot', 'changed', 'meant', 'again', 'new', 'criteria', 'standard', 'after'], 'The target keeps changing after you meet it, so the promotion can never be earned.'],
   ['goalposts', 'In a debate: "Show me one study." You do. "One study is nothing, show ten." You do. "Those are not peer reviewed."', ['one study', 'ten', 'peer', 'again', 'more', 'changed', 'criteria', 'standard', 'never enough'], 'Each time you meet the demand, a new one appears, so nothing could ever count as enough.'],
   ['strawman', 'You say "I would like us to spend a little less on holidays." They reply: "So you want us to live like paupers and never have fun?"', ['little less', 'paupers', 'never', 'fun', 'exaggerat', 'extreme', 'so you', 'misrepresent', 'twist'], 'Your modest point is replaced with an extreme version that is easy to attack.'],
@@ -118,622 +118,48 @@ const SCEN_RAW = [
 
 /* Harder, subtler, more realistic situations (level 2). Append-only: ids are technique + running index. */
 const SCEN_MORE = [
-[
-"reciprocity",
-"A vendor at a trade show hands your team a free sample pack and a printed industry report. Two days later their rep emails: \"Glad the materials helped. Could we get 30 minutes with your CFO this week?\"",
-[
-"sample",
-"free",
-"report",
-"materials",
-"helped",
-"favour",
-"owe",
-"return",
-"30 minutes",
-"cfo"
-],
-"Unrequested free value came first, and the request explicitly points back to it (\"glad the materials helped\") to get access to the decision maker."
-],
-[
-"reciprocity",
-"A neighbour fixes your fence while you are away and refuses payment. A month later he asks you to vouch for his unlicensed renovation business to the council.",
-[
-"fence",
-"fix",
-"refus",
-"payment",
-"favour",
-"owe",
-"vouch",
-"return",
-"debt",
-"unlicensed"
-],
-"A generous unasked favour builds a felt debt, which is then called in for something much bigger and riskier than the favour."
-],
-[
-"commitment",
-"A charity asks you to wear a small pin \"to show you care\" about a cause. A week later a volunteer visits: \"You are already a supporter. Would you sign a monthly direct debit?\"",
-[
-"pin",
-"already",
-"supporter",
-"show you care",
-"small",
-"identity",
-"wear",
-"consist",
-"direct debit"
-],
-"The cheap symbolic act (a pin) makes you see yourself as a supporter. The bigger ask then appeals to that new self-image."
-],
-[
-"commitment",
-"Your manager has you write a short statement saying you are \"committed to the team process\". Later, when you object to a flawed step, she says: \"You publicly committed to this, remember?\"",
-[
-"written",
-"statement",
-"public",
-"committed",
-"remember",
-"consist",
-"objection",
-"earlier",
-"said"
-],
-"A written, public commitment is used afterwards to shut down a legitimate objection, appealing to consistency instead of the merits."
-],
-[
-"proof",
-"A fundraising page lists the last five donors, all giving $100, with a note \"most donors give $100\". You had planned to give $20 and now give $100.",
-[
-"donors",
-"most",
-"$100",
-"others",
-"list",
-"norm",
-"plan",
-"similar",
-"typical",
-"100"
-],
-"The curated list of what others gave sets a social norm, shifting your amount upward. It may not even be a real sample."
-],
-[
-"proof",
-"A forum thread shows 50 accounts all praising a crypto coin. You notice they were created this week and use near-identical phrasing.",
-[
-"accounts",
-"praising",
-"created",
-"similar",
-"many",
-"crowd",
-"fake",
-"week",
-"crypto",
-"coin"
-],
-"Manufactured consensus: the crowd is fake, built to make the coin look widely trusted."
-],
-[
-"authority",
-"A consultant says \"studies show\" and \"Harvard research proves\" that open-plan offices boost output, but never names a study. When you ask, he says \"you can look it up.\"",
-[
-"studies",
-"harvard",
-"no name",
-"named",
-"look it up",
-"vague",
-"cite",
-"evidence",
-"credibility",
-"research"
-],
-"Prestigious names stand in for citations. The claim cannot be checked, and the burden is pushed onto you."
-],
-[
-"authority",
-"A junior engineer finds a bug. The senior says \"I wrote this module, it can not be wrong\" and the team defers, even though the junior has a failing test.",
-[
-"wrote",
-"senior",
-"can not be wrong",
-"can't be wrong",
-"defer",
-"failing test",
-"junior",
-"title",
-"evidence",
-"rank"
-],
-"Rank and ownership are treated as proof, overriding concrete evidence (a failing test)."
-],
-[
-"liking",
-"A recruiter learns you love trail running, shares photos of her own hikes, calls you \"exactly the culture we want\", then pushes you to accept the offer without negotiating.",
-[
-"trail",
-"hik",
-"culture",
-"exactly",
-"compliment",
-"similar",
-"rapport",
-"negotiat",
-"accept",
-"flatter"
-],
-"Shared interests and flattery build a bond, which makes negotiating feel like betraying a friend."
-],
-[
-"liking",
-"An online \"friend\" from a hobby forum always agrees with you, mirrors your phrases, praises your posts, and one day asks for your login \"to help promote your channel\".",
-[
-"agrees",
-"mirror",
-"praise",
-"forum",
-"login",
-"friend",
-"rapport",
-"help",
-"promote",
-"flatter"
-],
-"Agreement, mirroring and praise manufacture trust that is then spent on a risky request."
-],
-[
-"scarcity",
-"A \"limited edition\" drop says \"Only 100 will ever be made.\" The listing has been up for three weeks and the count never drops below 100.",
-[
-"only 100",
-"limited",
-"count",
-"never",
-"weeks",
-"fake",
-"scarcity",
-"edition",
-"drop",
-"rare"
-],
-"Scarcity is claimed but not real. The point is to trigger fear of missing out."
-],
-[
-"scarcity",
-"A landlord says: \"Three other couples are viewing this flat today, so I need a deposit by tonight.\" You have not seen the lease.",
-[
-"other couples",
-"tonight",
-"deposit",
-"lease",
-"viewing",
-"pressure",
-"today",
-"urgent",
-"time",
-"decide"
-],
-"Competition for a scarce item plus a same-day deadline pushes you to commit money before reading the terms."
-],
-[
-"doorface",
-"A sales rep opens with \"Our enterprise plan is $24,000 a year.\" You laugh. \"No problem. What about our team plan at $6,000? It is our best value ever.\"",
-[
-"24000",
-"24,000",
-"6000",
-"6,000",
-"enterprise",
-"team plan",
-"laugh",
-"smaller",
-"compromise",
-"first"
-],
-"The $24,000 opener was never meant to be accepted. It makes $6,000 look like a generous concession."
-],
-[
-"doorface",
-"A teenager asks to stay out until 3 am. Told no, they say \"okay, midnight then?\" The parent who was prepared to say 10 pm agrees to midnight.",
-[
-"3 am",
-"midnight",
-"10",
-"compromise",
-"first",
-"smaller",
-"no",
-"bigger",
-"ask",
-"agrees"
-],
-"An extreme first ask makes the second one feel like a compromise, even though it is well above what the parent would normally allow."
-],
-[
-"anchoring",
-"A menu lists a $120 wine at the top. The $45 wine next to it now feels sensible, though it carries the highest margin.",
-[
-"120",
-"45",
-"top",
-"sensible",
-"compar",
-"margin",
-"wine",
-"decoy",
-"reference",
-"high"
-],
-"The expensive wine acts as a decoy anchor so the second-priciest choice looks reasonable."
-],
-[
-"anchoring",
-"A used-car seller says \"I have had offers of $9,500, but for you $8,000.\" The blue book value is $6,000.",
-[
-"9,500",
-"9500",
-"offers",
-"8,000",
-"6,000",
-"blue book",
-"reference",
-"first number",
-"anchor",
-"discount"
-],
-"The inflated \"other offers\" figure becomes the anchor, so $8,000 feels like a discount."
-],
-[
-"gaslighting",
-"A friend says something cruel at dinner. When you raise it later: \"I was joking, you know that. You always take everything so seriously. Other people do not hear it like that, so maybe it is you.\"",
-[
-"joking",
-"serious",
-"sensitive",
-"maybe it is you",
-"other people",
-"doubt",
-"always",
-"cruel",
-"invalid",
-"you"
-],
-"Your perception is recast as the problem (\"maybe it is you\"), so you doubt a reasonable reaction."
-],
-[
-"gaslighting",
-"A colleague quietly changes the deadline in the shared plan. When you miss it: \"I told you in the standup. You must not have been listening. This keeps happening with you.\"",
-[
-"told you",
-"standup",
-"listening",
-"deadline",
-"keeps happening",
-"changed",
-"deny",
-"memory",
-"blame",
-"shared plan"
-],
-"The change is denied and your memory and attention are blamed, building a pattern where you distrust yourself."
-],
-[
-"darvo",
-"You tell your roommate she used your things again. She says: \"I did not. And honestly I am exhausted from being treated like a suspect in my own home. You are making me the bad guy.\"",
-[
-"did not",
-"didn't",
-"suspect",
-"bad guy",
-"exhausted",
-"own home",
-"blame",
-"victim",
-"accus",
-"deny"
-],
-"She denies it, attacks the accusation, then casts herself as the wronged party."
-],
-[
-"darvo",
-"A manager is reported for shouting at a junior. He tells HR: \"It never happened. The junior is unstable and has been out to get me. I am the one being harassed.\"",
-[
-"never happened",
-"unstable",
-"out to get",
-"harass",
-"victim",
-"hr",
-"reported",
-"deny",
-"attack",
-"junior"
-],
-"Denial, an attack on the reporter, and a claim of being the real victim: the classic reversal."
-],
-[
-"lovebomb",
-"After four days of chatting, someone you have not met says they have never felt this way, sends daily poems, calls you \"the one\", and then asks for money for a flight to meet you.",
-[
-"four days",
-"never felt",
-"poems",
-"the one",
-"money",
-"flight",
-"not met",
-"daily",
-"rush",
-"intense"
-],
-"Extreme intimacy with no real knowledge, followed by a money request: the pattern of romance scams."
-],
-[
-"lovebomb",
-"A mentor who has just met you says you are \"chosen\", gives you free dinners and constant attention, and says your old friends \"do not deserve you\".",
-[
-"chosen",
-"free",
-"attention",
-"friends",
-"do not deserve",
-"don't deserve",
-"isolat",
-"praise",
-"special",
-"dinners"
-],
-"Special treatment and attention first, then separation from your support network. Isolation is the aim."
-],
-[
-"guilt",
-"After you decline a favour, a friend says: \"I guess I am just not as important to you as your new friends. I helped you move, but whatever.\"",
-[
-"helped you move",
-"not as important",
-"new friends",
-"whatever",
-"guilt",
-"decline",
-"favour",
-"owe",
-"important",
-"ungrateful"
-],
-"Past help is turned into a debt and your refusal into proof you do not care."
-],
-[
-"guilt",
-"At work: \"I stayed late all week covering for you. I am sure you would not understand, you always leave on time.\"",
-[
-"stayed late",
-"covering",
-"always leave",
-"would not understand",
-"wouldn't understand",
-"guilt",
-"leave on time",
-"sacrific",
-"owe",
-"week"
-],
-"Self-sacrifice is displayed so you feel in debt and agree to take on more."
-],
-[
-"triangulation",
-"Your partner says: \"My ex always said you were insecure, and honestly I see her point.\"",
-[
-"ex",
-"always said",
-"insecure",
-"see her point",
-"third",
-"compar",
-"jealous",
-"said",
-"partner",
-"pressure"
-],
-"A third party is brought in as a judge to pressure you and stir insecurity."
-],
-[
-"triangulation",
-"A manager tells two teammates different things: to Ana \"Sam says your design is sloppy\", to Sam \"Ana says you are slow\". Neither said it.",
-[
-"sam",
-"ana",
-"sloppy",
-"slow",
-"neither",
-"third",
-"different",
-"pit",
-"rivalry",
-"never said"
-],
-"Fabricated comments passed between people create conflict and keep the manager as the hub of information."
-],
-[
-"intermittent",
-"A dating app match replies instantly with long messages some days, then vanishes for four days, then returns with an apology and affection. You check your phone constantly.",
-[
-"vanish",
-"instantly",
-"four days",
-"apolog",
-"check",
-"phone",
-"unpredict",
-"return",
-"reward",
-"hot"
-],
-"Unpredictable attention is more addictive than steady attention, so you keep checking for the next reward."
-],
-[
-"intermittent",
-"A game gives loot boxes with random drop rates. You keep opening them hoping for a rare item, and have already spent far more than you planned.",
-[
-"loot",
-"random",
-"rare",
-"spent",
-"hoping",
-"drop",
-"slot",
-"unpredict",
-"opening",
-"reward"
-],
-"Random, infrequent rewards (a slot-machine design) are the most habit-forming schedule of reinforcement."
-],
-[
-"stonewall",
-"Every time you raise money, your spouse says \"I am done talking\", goes to another room and puts headphones on. The topic has never been discussed.",
-[
-"done talking",
-"another room",
-"headphones",
-"every time",
-"never discussed",
-"avoid",
-"silent",
-"money",
-"refus",
-"shut"
-],
-"Refusing to engage ends the topic permanently, which shifts all the discomfort to you."
-],
-[
-"stonewall",
-"You ask a coworker about a missed handover. For the rest of the week she answers only \"ok\" and \"fine\", and stops replying to your messages until you drop it.",
-[
-"ok",
-"fine",
-"stops replying",
-"drop it",
-"week",
-"handover",
-"silent",
-"ignore",
-"avoid",
-"messages"
-],
-"Minimal replies and silence punish you for asking and avoid accountability."
-],
-[
-"falsedilemma",
-"\"Either we raise prices 20% or the company folds,\" says the CFO, who has not shown cost cuts, new revenue or financing alternatives.",
-[
-"either",
-"20",
-"folds",
-"alternatives",
-"cost cuts",
-"options",
-"only two",
-"financing",
-"binary",
-"raise prices"
-],
-"Two options are presented as the only ones, while obvious alternatives are never discussed."
-],
-[
-"falsedilemma",
-"\"You are either a patriot or a traitor,\" says the speaker to a heckler asking about the budget.",
-[
-"patriot",
-"traitor",
-"either",
-"heckler",
-"budget",
-"only two",
-"binary",
-"middle",
-"question",
-"label"
-],
-"A legitimate question is forced into a loyalty fork, so the actual topic is avoided."
-],
-[
-"goalposts",
-"You are told \"Show us the pilot works and we will fund it.\" The pilot works. \"Now show it works at ten times scale.\" You do. \"But we need a competitor to endorse it.\"",
-[
-"pilot",
-"fund",
-"ten times",
-"scale",
-"competitor",
-"endorse",
-"new",
-"again",
-"changed",
-"criteria"
-],
-"Every time the condition is satisfied, a new, harder one appears. Funding was never going to come."
-],
-[
-"goalposts",
-"Your landlord: \"Fix the leak and I will return the deposit.\" You fix it. \"The paint around it is damaged now, fix that too.\" Then: \"Also the whole wall.\"",
-[
-"leak",
-"deposit",
-"paint",
-"wall",
-"fix",
-"new",
-"again",
-"also",
-"demands",
-"criteria"
-],
-"The condition for getting your deposit grows each time you meet it."
-],
-[
-"strawman",
-"You say, \"I think we need more evidence before banning it.\" He replies: \"So you want to let people get hurt while you wait for perfect proof forever.\"",
-[
-"more evidence",
-"ban",
-"perfect proof",
-"forever",
-"hurt",
-"so you",
-"wait",
-"exaggerat",
-"misrepresent",
-"extreme"
-],
-"A moderate position (\"more evidence\") is distorted into an extreme, callous one and then attacked."
-],
-[
-"strawman",
-"A friend says she would rather not drink at the party. \"Oh, so you think everyone who drinks is irresponsible and you are better than us?\"",
-[
-"rather not drink",
-"irresponsible",
-"better than us",
-"so you",
-"everyone",
-"think",
-"exaggerat",
-"misrepresent",
-"twist",
-"judge"
-],
-"A personal choice is rewritten as a judgement of everyone else, then used to pressure her."
-]
+  ["reciprocity", "A vendor at a trade show hands your team a free sample pack and a printed industry report. Two days later their rep emails: \"Glad the materials helped. Could we get 30 minutes with your CFO this week?\"", ["sample", "free", "report", "materials", "helped", "favour", "owe", "return", "30 minutes", "cfo"], "Unrequested free value came first, and the request explicitly points back to it (\"glad the materials helped\") to get access to the decision maker."],
+  ["reciprocity", "A neighbour fixes your fence while you are away and refuses payment. A month later he asks you to vouch for his unlicensed renovation business to the council.", ["fence", "fix", "refus", "payment", "favour", "owe", "vouch", "return", "debt", "unlicensed"], "A generous unasked favour builds a felt debt, which is then called in for something much bigger and riskier than the favour."],
+  ["commitment", "A charity asks you to wear a small pin \"to show you care\" about a cause. A week later a volunteer visits: \"You are already a supporter. Would you sign a monthly direct debit?\"", ["pin", "already", "supporter", "show you care", "small", "identity", "wear", "consist", "direct debit"], "The cheap symbolic act (a pin) makes you see yourself as a supporter. The bigger ask then appeals to that new self-image."],
+  ["commitment", "Your manager has you write a short statement saying you are \"committed to the team process\". Later, when you object to a flawed step, she says: \"You publicly committed to this, remember?\"", ["written", "statement", "public", "committed", "remember", "consist", "objection", "earlier", "said"], "A written, public commitment is used afterwards to shut down a legitimate objection, appealing to consistency instead of the merits."],
+  ["proof", "A fundraising page lists the last five donors, all giving $100, with a note \"most donors give $100\". You had planned to give $20 and now give $100.", ["donors", "most", "$100", "others", "list", "norm", "plan", "similar", "typical", "100"], "The curated list of what others gave sets a social norm, shifting your amount upward. It may not even be a real sample."],
+  ["proof", "A forum thread shows 50 accounts all praising a crypto coin. You notice they were created this week and use near-identical phrasing.", ["accounts", "praising", "created", "similar", "many", "crowd", "fake", "week", "crypto", "coin"], "Manufactured consensus: the crowd is fake, built to make the coin look widely trusted."],
+  ["authority", "A consultant says \"studies show\" and \"Harvard research proves\" that open-plan offices boost output, but never names a study. When you ask, he says \"you can look it up.\"", ["studies", "harvard", "no name", "named", "look it up", "vague", "cite", "evidence", "credibility", "research"], "Prestigious names stand in for citations. The claim cannot be checked, and the burden is pushed onto you."],
+  ["authority", "A junior engineer finds a bug. The senior says \"I wrote this module, it can not be wrong\" and the team defers, even though the junior has a failing test.", ["wrote", "senior", "can not be wrong", "can't be wrong", "defer", "failing test", "junior", "title", "evidence", "rank"], "Rank and ownership are treated as proof, overriding concrete evidence (a failing test)."],
+  ["liking", "A recruiter learns you love trail running, shares photos of her own hikes, calls you \"exactly the culture we want\", then pushes you to accept the offer without negotiating.", ["trail", "hik", "culture", "exactly", "compliment", "similar", "rapport", "negotiat", "accept", "flatter"], "Shared interests and flattery build a bond, which makes negotiating feel like betraying a friend."],
+  ["liking", "An online \"friend\" from a hobby forum always agrees with you, mirrors your phrases, praises your posts, and one day asks for your login \"to help promote your channel\".", ["agrees", "mirror", "praise", "forum", "login", "friend", "rapport", "help", "promote", "flatter"], "Agreement, mirroring and praise manufacture trust that is then spent on a risky request."],
+  ["scarcity", "A \"limited edition\" drop says \"Only 100 will ever be made.\" The listing has been up for three weeks and the count never drops below 100.", ["only 100", "limited", "count", "never", "weeks", "fake", "scarcity", "edition", "drop", "rare"], "Scarcity is claimed but not real. The point is to trigger fear of missing out."],
+  ["scarcity", "A landlord says: \"Three other couples are viewing this flat today, so I need a deposit by tonight.\" You have not seen the lease.", ["other couples", "tonight", "deposit", "lease", "viewing", "pressure", "today", "urgent", "time", "decide"], "Competition for a scarce item plus a same-day deadline pushes you to commit money before reading the terms."],
+  ["doorface", "A charity rep asks for a $240 monthly pledge. You decline. \"No problem. How about just $20 a month?\"", ["240", "$20", "pledge", "decline", "how about", "smaller", "compromise", "monthly", "bigger", "concession"], "The $240 ask was never meant to be accepted. It makes $20 a month feel like a generous concession."],
+  ["doorface", "A teenager asks to stay out until 3 am. Told no, they say \"okay, midnight then?\" The parent who was prepared to say 10 pm agrees to midnight.", ["3 am", "midnight", "10", "compromise", "first", "smaller", "no", "bigger", "ask", "agrees"], "An extreme first ask makes the second one feel like a compromise, even though it is well above what the parent would normally allow."],
+  ["anchoring", "A charity donation form offers default buttons of $500, $250, $100 and $50. You had planned to give $20 and tap $50.", ["500", "250", "100", "buttons", "default", "planned", "suggested", "reference", "anchor", "modest"], "The high suggested amounts set the reference point, so $50 feels modest next to them even though it is far above what you planned."],
+  ["anchoring", "A used-car seller says \"I have had offers of $9,500, but for you $8,000.\" The blue book value is $6,000.", ["9,500", "9500", "offers", "8,000", "6,000", "blue book", "reference", "first number", "anchor", "discount"], "The inflated \"other offers\" figure becomes the anchor, so $8,000 feels like a discount."],
+  ["gaslighting", "A friend says something cruel at dinner. When you raise it later: \"I was joking, you know that. You always take everything so seriously. Other people do not hear it like that, so maybe it is you.\"", ["joking", "serious", "sensitive", "maybe it is you", "other people", "doubt", "always", "cruel", "invalid", "you"], "Your perception is recast as the problem (\"maybe it is you\"), so you doubt a reasonable reaction."],
+  ["gaslighting", "A colleague quietly changes the deadline in the shared plan. When you miss it: \"I told you in the standup. You must not have been listening. This keeps happening with you.\"", ["told you", "standup", "listening", "deadline", "keeps happening", "changed", "deny", "memory", "blame", "shared plan"], "The change is denied and your memory and attention are blamed, building a pattern where you distrust yourself."],
+  ["darvo", "You tell your roommate she used your things again. She says: \"I did not. And honestly I am exhausted from being treated like a suspect in my own home. You are making me the bad guy.\"", ["did not", "didn't", "suspect", "bad guy", "exhausted", "own home", "blame", "victim", "accus", "deny"], "She denies it, attacks the accusation, then casts herself as the wronged party."],
+  ["darvo", "A manager is reported for shouting at a junior. He tells HR: \"It never happened. The junior is unstable and has been out to get me. I am the one being harassed.\"", ["never happened", "unstable", "out to get", "harass", "victim", "hr", "reported", "deny", "attack", "junior"], "Denial, an attack on the reporter, and a claim of being the real victim: the classic reversal."],
+  ["lovebomb", "After four days of chatting, someone you have not met says they have never felt this way, sends daily poems, calls you \"the one\", and then asks for money for a flight to meet you.", ["four days", "never felt", "poems", "the one", "money", "flight", "not met", "daily", "rush", "intense"], "Extreme intimacy with no real knowledge, followed by a money request: the pattern of romance scams."],
+  ["lovebomb", "A mentor who has just met you says you are \"chosen\", gives you free dinners and constant attention, and says your old friends \"do not deserve you\".", ["chosen", "free", "attention", "friends", "do not deserve", "don't deserve", "isolat", "praise", "special", "dinners"], "Special treatment and attention first, then separation from your support network. Isolation is the aim."],
+  ["guilt", "After you decline a favour, a friend says: \"I guess I am just not as important to you as your new friends. I helped you move, but whatever.\"", ["helped you move", "not as important", "new friends", "whatever", "guilt", "decline", "favour", "owe", "important", "ungrateful"], "Past help is turned into a debt and your refusal into proof you do not care."],
+  ["guilt", "At work: \"I stayed late all week covering for you. I am sure you would not understand, you always leave on time.\"", ["stayed late", "covering", "always leave", "would not understand", "wouldn't understand", "guilt", "leave on time", "sacrific", "owe", "week"], "Self-sacrifice is displayed so you feel in debt and agree to take on more."],
+  ["triangulation", "Your partner says: \"My ex always said you were insecure, and honestly I see her point.\"", ["ex", "always said", "insecure", "see her point", "third", "compar", "jealous", "said", "partner", "pressure"], "A third party is brought in as a judge to pressure you and stir insecurity."],
+  ["triangulation", "A manager tells two teammates different things: to Ana \"Sam says your design is sloppy\", to Sam \"Ana says you are slow\". Neither said it.", ["sam", "ana", "sloppy", "slow", "neither", "third", "different", "pit", "rivalry", "never said"], "Fabricated comments passed between people create conflict and keep the manager as the hub of information."],
+  ["intermittent", "A dating app match replies instantly with long messages some days, then vanishes for four days, then returns with an apology and affection. You check your phone constantly.", ["vanish", "instantly", "four days", "apolog", "check", "phone", "unpredict", "return", "reward", "hot"], "Unpredictable attention is more addictive than steady attention, so you keep checking for the next reward."],
+  ["intermittent", "A game gives loot boxes with random drop rates. You keep opening them hoping for a rare item, and have already spent far more than you planned.", ["loot", "random", "rare", "spent", "hoping", "drop", "slot", "unpredict", "opening", "reward"], "Random, infrequent rewards (a slot-machine design) are the most habit-forming schedule of reinforcement."],
+  ["stonewall", "Every time you raise money, your spouse says \"I am done talking\", goes to another room and puts headphones on. The topic has never been discussed.", ["done talking", "another room", "headphones", "every time", "never discussed", "avoid", "silent", "money", "refus", "shut"], "Refusing to engage ends the topic permanently, which shifts all the discomfort to you."],
+  ["stonewall", "You ask a coworker about a missed handover. For the rest of the week she answers only \"ok\" and \"fine\", and stops replying to your messages until you drop it. It has happened every time you raise a problem with her.", ["ok", "fine", "stops replying", "drop it", "week", "handover", "silent", "ignore", "avoid", "messages"], "Minimal replies and silence punish you for asking and avoid accountability, and since it happens every time, it is a pattern, not a bad day."],
+  ["falsedilemma", "\"Either we raise prices 20% or the company folds,\" says the CFO, who has not shown cost cuts, new revenue or financing alternatives.", ["either", "20", "folds", "alternatives", "cost cuts", "options", "only two", "financing", "binary", "raise prices"], "Two options are presented as the only ones, while obvious alternatives are never discussed."],
+  ["falsedilemma", "\"You are either a patriot or a traitor,\" says the speaker to a heckler asking about the budget.", ["patriot", "traitor", "either", "heckler", "budget", "only two", "binary", "middle", "question", "label"], "A legitimate question is forced into a loyalty fork, so the actual topic is avoided."],
+  ["goalposts", "You are told \"Show us the pilot works and we will fund it.\" The pilot works. \"Now show it works at ten times scale.\" You do. \"But we need a competitor to endorse it.\"", ["pilot", "fund", "ten times", "scale", "competitor", "endorse", "new", "again", "changed", "criteria"], "Every time the condition is satisfied, a new, harder one appears. Funding was never going to come."],
+  ["goalposts", "Your landlord: \"Fix the leak and I will return the deposit.\" You fix it. \"The paint around it is damaged now, fix that too.\" Then: \"Also the whole wall.\"", ["leak", "deposit", "paint", "wall", "fix", "new", "again", "also", "demands", "criteria"], "The condition for getting your deposit grows each time you meet it."],
+  ["strawman", "You say, \"I think we need more evidence before banning it.\" He replies: \"So you want to let people get hurt while you wait for perfect proof forever.\"", ["more evidence", "ban", "perfect proof", "forever", "hurt", "so you", "wait", "exaggerat", "misrepresent", "extreme"], "A moderate position (\"more evidence\") is distorted into an extreme, callous one and then attacked."],
+  ["strawman", "A friend says she would rather not drink at the party. \"Oh, so you think everyone who drinks is irresponsible and you are better than us?\"", ["rather not drink", "irresponsible", "better than us", "so you", "everyone", "think", "exaggerat", "misrepresent", "twist", "judge"], "A personal choice is rewritten as a judgement of everyone else, then used to pressure her."]
 ];
 
 /* Negative controls: fair, honest influence. Learners must also be able to say "this is fine". */
 const FAIR = { id: 'fair', name: 'Fair request (no manipulation)', short: 'Fair, no manipulation here' };
 const SCEN_FAIR = [
-  ['A bakery sign says: "We bake 20 loaves a day and they usually sell out by 10 am."', ['sell out', 'loaves', 'true', 'fact', 'information', 'no pressure', 'honest', 'choice', 'sign', 'usually'], 'This is a plain, checkable fact about supply. There is no countdown, no pressure, no threat of loss. You can still decide freely.'],
+  ['A bakery sign says: "Bread is baked at 6 am and 2 pm. Tell us if you would like us to reserve a loaf for you."', ['baked', 'reserve', 'tell us', 'loaf', 'information', 'no pressure', 'honest', 'choice', 'offer', 'sign'], 'Plain information about when bread is available, plus an offer to help. There is no countdown, no pressure and no threat of loss. You decide freely.'],
   ['Your doctor says: "The guidelines recommend this treatment. Here are the benefits and the risks. You are welcome to get a second opinion."', ['guidelines', 'benefits', 'risks', 'second opinion', 'evidence', 'explain', 'choice', 'transparent', 'doctor', 'welcome'], 'Real expertise, offered with reasons, trade-offs and an invitation to check elsewhere. Authority becomes manipulation only when it replaces evidence or blocks questions.'],
   ['A friend who helped you move says: "If you have time, could you help me paint on Saturday? Totally fine to say no, I know it is busy."', ['help', 'moved', 'time', 'fine to say no', 'say no', 'busy', 'no pressure', 'honest', 'ask', 'choice'], 'A direct request with an explicit, sincere way out. Reciprocity here is ordinary friendship, not a lever.'],
   ['A product page shows 4.6 stars from 3,200 verified buyers, including the 1-star reviews and the most common complaint.', ['verified', 'reviews', '1-star', 'complaint', 'honest', 'sample', 'balanced', 'stars', 'real', 'transparent'], 'Real, balanced evidence from a genuine sample, including the negatives. Social proof is manipulation when it is selected, faked or used instead of information.'],
@@ -742,7 +168,7 @@ const SCEN_FAIR = [
 ];
 
 const goodKeys = (keys) => {
-  const STOP = new Set(['or', 'no', 'now', 'sit', 'even', 'new', 'time', 'low', 'was', 'did', 'you', 'not', 'the', 'and', 'ok', 'hot', 'pit', 'week', 'again', 'also', 'then', 'said', 'first', 'one', 'only', 'just', 'fine', 'top', 'high', 'big', 'sign', 'same', 'else', 'say', 'told', 'real', 'true', 'think', 'know', 'make', 'help', 'time', 'ask', 'talk']);
+  const STOP = new Set(['or', 'no', 'now', 'sit', 'even', 'new', 'time', 'low', 'was', 'did', 'you', 'not', 'the', 'and', 'ok', 'hot', 'pit', 'week', 'again', 'also', 'then', 'said', 'first', 'one', 'only', 'just', 'fine', 'top', 'high', 'big', 'sign', 'same', 'else', 'say', 'told', 'real', 'true', 'think', 'know', 'make', 'help', 'time', 'ask', 'talk', 'before']);
   const ALLOW = new Set(['ex', 'hr', 'cfo']);
   const seen = new Set(), out = [];
   for (const k of keys) {

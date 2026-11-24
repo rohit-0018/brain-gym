@@ -42,7 +42,7 @@ http.createServer(async (req, res) => {
       }
     }
     if (req.method !== 'GET') return json(res, 405, { error: 'method' });
-    let p = path.normalize(decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname));
+    let p; try { p = path.normalize(decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname)); } catch { res.writeHead(400); return res.end('Bad request'); }
     const file = path.join(ROOT, p);
     if (!file.startsWith(ROOT + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404); return res.end('Not found'); }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });

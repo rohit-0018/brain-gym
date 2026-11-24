@@ -32,14 +32,16 @@ test('SM-2: again requeues, good/easy grow intervals, ease floor', () => {
   let low = { reps: 3, interval: 5, ease: 1.35, due: 'x' }; assert.equal(L.sm2(low, 0, '2026-11-24').card.ease, 1.3);
   assert.equal(L.sm2({ reps: 5, interval: 0, ease: 1.3, due: 'x' }, 1, '2026-11-24').card.interval >= 1, true); // never 0-day on pass
 });
-test('reasoning score: right technique 60 + up to 40, wrong technique capped at 15', () => {
+test('reasoning score: right technique 50 + up to 50, wrong technique capped at 15', () => {
   const keys = ['gift', 'owe', 'free', 'return'];
-  assert.equal(L.scoreReasoning('Nothing relevant here at all really', keys, true).pts, 60);
+  assert.equal(L.scoreReasoning('Nothing relevant here at all really', keys, true).pts, 50);
   assert.equal(L.scoreReasoning('A FREE gift, so I owe them!', keys, true).pts, 100);
   assert.equal(L.scoreReasoning('A free gift', keys, false).pts, 10);
   assert.equal(L.scoreReasoning('free gift owe return', keys, false).pts, 15);
   assert.equal(L.scoreReasoning('x', keys, false).pts, 0);
   assert.equal(L.scoreReasoning("they didn’t say it", ["didn't"], false).hits.length, 1); // curly apostrophe
+  assert.equal(L.scoreReasoning('they dont worry', ["don't worry"], false).hits.length, 1);   // missing apostrophe
+  assert.equal(L.hasKey(L.norm('lend me $2,000 now'), '2000'), true);                            // digit-group commas
 });
 test('keys match on word boundaries: no substring gaming', () => {
   assert.equal(L.hasKey(L.norm('this is for more words'), 'or'), false);
@@ -60,6 +62,8 @@ test('skill index: levelling up never reads as slipping; daily best only', () =>
   const series = L.dailySeries([nb('2026-11-02', 2, 60), nb('2026-11-01', 2, 70), nb('2026-11-01', 2, 90)], 'nback');
   assert.equal(series.length, 2); assert.equal(series[0], 2.4); // sorted by date, best of the day
   assert.deepEqual(L.dailySeries([], 'nback'), []);
+  const sp = (acc, rt) => ({ date: 'd', activity: 'stroop', score: acc, detail: JSON.stringify({ avgRtMs: rt }) });
+  assert.ok(L.skillOf(sp(95, 700)) > L.skillOf(sp(95, 900)));  // faster at same accuracy = better
 });
 test('CSV round trip with quotes, commas, newlines, formula guard', () => {
   const H = ['id', 'detail']; const rows = [{ id: '1', detail: 'a,"b"\nc' }, { id: '2', detail: '=HYPERLINK("x")' }, { id: '3', detail: '' }];

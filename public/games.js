@@ -25,7 +25,7 @@ function gNback(root, finish, alive) {
   const cells = []; for (let i = 0; i < 9; i++) { const t = h('<div class="tile"></div>'); $('#g').append(t); cells.push(t); }
   let pp = false, pl = false; const press = k => { if (k === 'p') pp = true; else pl = true; (k === 'p' ? $('#bp') : $('#bl')).classList.add('pressed'); };
   $('#bp').onclick = () => press('p'); $('#bl').onclick = () => press('l');
-  const key = e => { const k = e.key.toLowerCase(); if (k === 'a') press('p'); if (k === 'l') press('l'); };
+  const key = e => { if (e.ctrlKey || e.metaKey || e.altKey) return; const k = e.key.toLowerCase(); if (k === 'a') press('p'); if (k === 'l') press('l'); };
   document.addEventListener('keydown', key);
   const prev = cleanup; cleanup = () => { document.removeEventListener('keydown', key); prev(); };
   (async () => {
@@ -54,7 +54,7 @@ function gStroop(root, finish, alive) {
   root.innerHTML = `<p class="msg">Tap the colour of the INK, not the word (or press 1-4). ${total} rounds.</p><div class="big" id="w" aria-live="off"></div><div class="row-btns" id="o"></div><p class="msg" id="st" aria-live="polite"></p>`;
   let i = 0, ok = 0, rts = [], t0, cur, lock = true;
   C.forEach((c, k) => { const b = h(`<button class="btn" style="border-bottom:4px solid ${c[1]}">${k + 1} · ${c[0]}</button>`); b.onclick = () => ans(k); $('#o').append(b); });
-  const key = e => { if (/^[1-4]$/.test(e.key)) ans(+e.key - 1); }; document.addEventListener('keydown', key);
+  const key = e => { if (e.ctrlKey || e.metaKey || e.altKey) return; if (/^[1-4]$/.test(e.key)) ans(+e.key - 1); }; document.addEventListener('keydown', key);
   const prev = cleanup; cleanup = () => { document.removeEventListener('keydown', key); prev(); };
   function next() {
     if (!alive()) return; if (i >= total) { const acc = Math.round(ok / total * 100), avgRt = Math.round(avg(rts)); return finish(acc, { avgRtMs: avgRt }, `Average reaction ${avgRt} ms.`); }
@@ -87,20 +87,21 @@ function gSeq(root, finish, alive) {
 function gDigits(root, finish, alive) {
   const $ = s => root.querySelector(s), back = new Date().getDate() % 2 === 1; let len = 3, fails = 0, best = 0;
   root.innerHTML = `<p class="msg">${back ? 'Backward day: type the digits in reverse order.' : 'Type the digits in the same order.'}</p><div class="big" id="d" aria-live="off">&nbsp;</div>
-  <div class="field"><label for="in">Your answer</label><input type="text" id="in" inputmode="numeric" autocomplete="off" disabled placeholder="Type, then press Enter"></div><p class="msg" id="m" aria-live="polite"></p>`;
+  <div class="field"><label for="in">Your answer</label><input type="text" id="in" inputmode="numeric" autocomplete="off" disabled placeholder="Type, then press Enter"></div><div class="row-btns"><button class="btn" id="subm" disabled>Submit</button></div><p class="msg" id="m" aria-live="polite"></p>`;
   const inp = $('#in'); let expected = '', ready = false;
   async function round() {
-    if (!alive()) return; ready = false; inp.value = ''; inp.disabled = true; $('#m').textContent = `${len} digits`; await sleep(900);
+    if (!alive()) return; ready = false; inp.value = ''; inp.disabled = true; $('#subm').disabled = true; $('#m').textContent = `${len} digits`; await sleep(900);
     const ds = Array.from({ length: len }, () => rnd(10)); expected = (back ? [...ds].reverse() : ds).join('');
     for (const d of ds) { if (!alive()) return; $('#d').textContent = d; await sleep(750); $('#d').innerHTML = '&nbsp;'; await sleep(250); }
-    if (!alive()) return; inp.disabled = false; inp.focus(); ready = true; $('#m').textContent = 'Now recall.';
+    if (!alive()) return; inp.disabled = false; $('#subm').disabled = false; inp.focus(); ready = true; $('#m').textContent = 'Now recall.';
   }
-  inp.onkeydown = e => {
-    if (e.key !== 'Enter' || !ready) return; ready = false;
+  const submitD = () => {
+    if (!ready || !alive()) return; ready = false; $('#subm').disabled = true;
     if (inp.value.trim() === expected) { best = len; len++; fails = 0; $('#m').textContent = '✓ Correct'; } else { fails++; $('#m').textContent = `✗ It was ${expected}`; }
     if (fails >= 2) return setTimeout(() => finish(best, { mode: back ? 'backward' : 'forward' }, `Longest span: ${best}`), 1200);
     setTimeout(round, 1200);
   };
+  inp.onkeydown = e => { if (e.key === 'Enter') submitD(); }; $('#subm').onclick = submitD;
   round();
 }
 
@@ -117,9 +118,10 @@ function gMath(root, finish, alive) {
     }
     a = op === '+' ? x + y : op === '−' ? x - y : x * y; return `${x} ${op} ${y}`;
   };
-  root.innerHTML = `<p class="msg">Level ${lv}. Type the answer, press Enter. <b id="tm">60</b>s left</p><div class="big" id="q"></div><div class="field"><label for="in">Answer</label><input type="number" id="in"></div><p class="msg" id="m" aria-live="polite">Solved: 0</p>`;
+  root.innerHTML = `<p class="msg">Level ${lv}. Type the answer, press Enter. <b id="tm">60</b>s left</p><div class="big" id="q"></div><div class="field"><label for="in">Answer</label><input type="number" id="in" inputmode="numeric"></div><div class="row-btns"><button class="btn" id="subm">Submit</button></div><p class="msg" id="m" aria-live="polite">Solved: 0</p>`;
   const inp = $('#in'); $('#q').textContent = gen(); inp.focus();
-  inp.onkeydown = e => { if (e.key !== 'Enter' || inp.value === '') return; tried++; if (+inp.value === a) solved++; inp.value = ''; $('#q').textContent = gen(); $('#m').textContent = `Solved: ${solved}`; };
+  const submitM = () => { if (inp.value === '') return; tried++; if (+inp.value === a) solved++; inp.value = ''; $('#q').textContent = gen(); $('#m').textContent = `Solved: ${solved}`; inp.focus(); };
+  inp.onkeydown = e => { if (e.key === 'Enter') submitM(); }; $('#subm').onclick = submitM;
   const iv = setInterval(() => {
     if (!alive()) return clearInterval(iv); left--; $('#tm').textContent = left;
     if (left <= 0) { clearInterval(iv); const nl = solved >= 14 ? Math.min(5, lv + 1) : solved < 6 ? Math.max(1, lv - 1) : lv; setLevel('math', nl); finish(solved, { level: lv, tried }, `${solved} of ${tried} correct at level ${lv}. ${nl > lv ? 'Moving up a level.' : nl < lv ? 'Dropping a level for next time.' : ''}`); }
@@ -166,13 +168,13 @@ function gHabits(root, finish) {
 const dayNo = () => Math.floor(new Date(today() + 'T12:00:00') / 864e5);
 const techOfDay = () => TECH[dayNo() % TECH.length];
 const techById = id => TECH.find(t => t.id === id);
-const labelFor = id => id === 'fair' ? FAIR.short : shortName(techById(id));
+const labelFor = id => id === 'fair' ? FAIR.short : techById(id) ? shortName(techById(id)) : 'unknown';
 
 function manipStats() {
   const st = {};
   records.filter(r => r.activity === 'manip').forEach(r => {
     let d = {}; try { d = JSON.parse(r.detail); } catch { }
-    (d.results || []).forEach(x => { const e = st[x.id] ||= { n: 0, ok: 0, last: null, t: x.tid }; e.n++; e.ok += x.correct ? 1 : 0; e.last = x.correct; e.chosen = x.chosen; e.reason = x.reason; e.date = r.date; });
+    (Array.isArray(d.results) ? d.results : []).forEach(x => { if (!x || !SCEN.some(s => s.id === x.id)) return; const e = st[x.id] ||= { n: 0, ok: 0, last: null, t: x.tid }; e.n++; e.ok += x.correct ? 1 : 0; e.last = x.correct; e.chosen = x.chosen; e.reason = x.reason; e.date = r.date; });
   });
   return st;
 }
@@ -207,7 +209,7 @@ function gLesson(root, finish) {
   <h2 style="font-size:18px">How to counter it</h2><p>${esc(t.counter)}</p>
   <div class="field"><label for="ex">Where have you seen or felt this? Ads, work, family, media. A sentence or two.</label><textarea id="ex" style="min-height:90px"></textarea></div>
   <p class="err" role="alert"></p><div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="sv">Save and continue</button></div></div>`;
-  $('#sv').onclick = () => { const x = $('#ex').value.trim(), n = x ? x.split(/\s+/).length : 0; if (n < 6) { $('.err').textContent = 'Write a short sentence. Linking it to real life is what makes it stick.'; return; } finish(n, { tech: t.id, text: x }, 'Saved. You will meet this one again in the situations that follow, and tomorrow as a recall check.'); };
+  $('#sv').onclick = () => { const x = $('#ex').value.trim(), n = x ? x.split(/\s+/).length : 0; if (n < 6) { $('.err').textContent = 'Write a short sentence. Linking it to real life is what makes it stick.'; return; } finish(n, { tech: t.id, text: x }, 'Saved. Tomorrow your first situation will test this technique, once you have had a night to forget it.'); };
   $('#ex').focus();
 }
 
@@ -218,19 +220,25 @@ function gManip(root, finish, alive) {
     if (!alive()) return;
     if (i >= picked.length) return finish(Math.round(avg(results.map(r => r.pts))), { results }, `${results.filter(r => r.correct).length} of ${results.length} named correctly.`);
     const sc = picked[i], opts = optionsFor(sc); let chosen = null;
-    root.innerHTML = `<div style="text-align:left"><p class="eyebrow">Situation ${i + 1} of ${picked.length}${sc.lvl === 2 ? ' · harder' : ''}</p><p class="serif" style="font-size:22px;margin-bottom:22px">${esc(sc.text)}</p>
-    <p class="eyebrow" id="q1">1 · What is going on here? (keys 1-${opts.length})</p><div id="op" role="radiogroup" aria-labelledby="q1" class="opts"></div>
+    root.innerHTML = `<div style="text-align:left"><p class="eyebrow">Situation ${i + 1} of ${picked.length}${sc.lvl === 2 ? ' · harder' : ''}</p><p class="serif" id="sit" style="font-size:22px;margin-bottom:22px">${esc(sc.text)}</p>
+    <p class="eyebrow" id="q1">1 · What is going on here? (keys 1-${opts.length}, or arrow keys)</p><div id="op" role="radiogroup" aria-labelledby="q1" aria-describedby="sit" class="opts"></div>
     <div class="field"><label for="rs">2 · Your reasoning: which signals in the situation tell you so?</label><textarea id="rs" placeholder="They did X first, which creates… then asked for Y…"></textarea></div>
     <p class="err" role="alert"></p><div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="sub">Submit</button></div></div>`;
     const choose = (o, b) => { chosen = o; root.querySelectorAll('#op .opt').forEach(x => { x.setAttribute('aria-checked', 'false'); x.classList.remove('sel'); }); b.setAttribute('aria-checked', 'true'); b.classList.add('sel'); };
     opts.forEach((o, k) => { const b = h(`<button class="opt" role="radio" aria-checked="false"><span class="k">${k + 1}</span>${esc(o.label)}</button>`); b.onclick = () => choose(o, b); $('#op').append(b); });
     if (keyH) document.removeEventListener('keydown', keyH);
-    keyH = e => { if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return; const k = +e.key; if (k >= 1 && k <= opts.length) choose(opts[k - 1], root.querySelectorAll('#op .opt')[k - 1]); };
+    keyH = e => {
+      if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const btns = [...root.querySelectorAll('#op .opt')]; if (!btns.length) return;
+      const k = +e.key; if (k >= 1 && k <= opts.length) return choose(opts[k - 1], btns[k - 1]);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const cur = btns.indexOf(document.activeElement), nx = (Math.max(cur, 0) + (e.key === 'ArrowDown' ? 1 : btns.length - 1) + (cur < 0 ? -1 : 0)) % btns.length; btns[nx].focus(); choose(opts[nx], btns[nx]); }
+    };
     document.addEventListener('keydown', keyH);
     $('#sub').onclick = () => {
       const txt = $('#rs').value.trim(), err = $('.err');
       if (!chosen) { err.textContent = 'Pick an answer first.'; return; }
       if (txt.split(/\s+/).length < 8) { err.textContent = 'Explain your reasoning in a sentence or two (8+ words).'; return; }
+      if (keyH) { document.removeEventListener('keydown', keyH); keyH = null; }
       const correct = chosen.id === sc.t, { pts, hits } = Logic.scoreReasoning(txt, sc.keys, correct), fair = sc.t === 'fair', t = fair ? null : techById(sc.t);
       results.push({ id: sc.id, tid: sc.t, correct, pts, chosen: chosen.id, reason: txt.slice(0, 200) });
       root.innerHTML = `<div style="text-align:left" id="rv" tabindex="-1"><p class="eyebrow" style="color:${correct ? 'var(--good)' : 'var(--acc)'}">${correct ? 'Correct' : 'Not quite'} · ${pts}/100</p>

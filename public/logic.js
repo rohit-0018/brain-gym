@@ -9,9 +9,9 @@
   const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
 
   /* Reasoning score for "spot the technique".
-     Right technique: 60 + up to 40 for the signals you caught. Wrong technique: at most 15 (a good read is not nothing, but it must not
+     Right technique: 50 + up to 50 for the signals you caught (so a blind guess cannot reach full marks). Wrong technique: at most 15 (a good read is not nothing, but it must not
      outscore the right answer). Keys match on word boundaries so 'or' can never match 'for'. */
-  function norm(t) { return String(t).toLowerCase().replace(/[’']/g, "'").replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+  function norm(t) { return String(t).toLowerCase().replace(/(\d),(?=\d{3})/g, '$1').replace(/[’']/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
   const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   function hasKey(normText, key) {
     const k = norm(key); if (!k) return false;
@@ -22,7 +22,7 @@
     const n = norm(text);
     const hits = [...new Set(keys.filter(k => hasKey(n, k)))];
     const frac = Math.min(hits.length, 3) / 3;
-    return { pts: correct ? 60 + Math.round(frac * 40) : Math.round(frac * 15), hits };
+    return { pts: correct ? 50 + Math.round(frac * 50) : Math.round(frac * 15), hits };
   }
 
   /* Skill index used for trends: levels are folded in so levelling up never looks like "slipping". */
@@ -31,6 +31,7 @@
     const s = +r.score;
     if (r.activity === 'nback') return (d.n || 1) + (s - 50) / 100;   // s is balanced accuracy, 50 = chance
     if (r.activity === 'math') return (d.level || 1) + Math.min(s, 25) / 25;
+    if (r.activity === 'stroop') return s - (d.avgRtMs || 0) / 100;       // accuracy points minus speed, so getting faster shows as progress
     return s;
   }
   /* One value per day (the best), oldest first. Retries on the same day cannot inflate a trend. */

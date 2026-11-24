@@ -17,6 +17,8 @@ let storageOK = true;
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { storageOK = false; setSync(); } };
 let records = load(K.rec, []), cards = load(K.cards, []), levels = load(K.lvl, {});
+if (!Array.isArray(records)) records = []; if (!Array.isArray(cards)) cards = []; if (!levels || typeof levels !== 'object' || Array.isArray(levels)) levels = {};
+records = records.filter(r => r && typeof r === 'object' && r.id && r.date && r.activity);
 let serverUp = false;
 function setSync() {
   const el = $('#sync'); if (!el) return;
@@ -35,7 +37,8 @@ function addRecord(activity, score, detail = {}) {
 }
 const saveCards = () => { save(K.cards, cards); if (serverUp) post('api/cards', cards).catch(() => { }); };
 
-async function probe() { // optional local server: short timeout, must answer JSON, never blocks first paint
+async function probe() { // optional local server (npm start): short timeout, must answer JSON, never blocks first paint
+  if (!isLocal) return;
   const get = async u => { const c = new AbortController(), t = setTimeout(() => c.abort(), 1500); try { const r = await fetch(u, { signal: c.signal }); if (!r.ok || !(r.headers.get('content-type') || '').includes('json')) throw 0; return await r.json(); } finally { clearTimeout(t); } };
   try {
     const [sr, sc] = await Promise.all([get('api/records'), get('api/cards')]);
@@ -43,9 +46,9 @@ async function probe() { // optional local server: short timeout, must answer JS
     sr.forEach(r => { if (!ids.has(r.id)) { records.push({ ...r, score: Number(r.score) }); added++; } });
     records.sort((a, b) => a.timestamp.localeCompare(b.timestamp)); save(K.rec, records);
     await post('api/records', records);
-    if (!cards.length && sc.length) cards = sc.map(c => ({ ...c, interval: +c.interval, ease: +c.ease, reps: +c.reps }));
+    const have = new Set(cards.map(c => c.id)); sc.forEach(c => { if (!have.has(c.id)) cards.push({ ...c, interval: +c.interval, ease: +c.ease, reps: +c.reps }); });
     saveCards(); setSync();
-    if (added && !inGame) show(currentTab);
+    if (added && !inGame && (currentTab === 'today' || currentTab === 'report')) show(currentTab);
   } catch { serverUp = false; setSync(); }
 }
 
@@ -77,9 +80,9 @@ function show(tab) {
   document.querySelectorAll('#nav button').forEach(b => { const on = b.dataset.tab === tab; b.classList.toggle('on', on); on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
   const app = $('#app'); app.innerHTML = '';
   ({ today: vToday, practice: vPractice, report: vReport, cards: vCards, library: vLibrary })[tab](app);
-  window.scrollTo(0, 0);
+  window.scrollTo(0, 0); const hd = app.querySelector('h1'); if (hd) { hd.tabIndex = -1; hd.focus({ preventScroll: true }); }
 }
-$('#nav').onclick = e => { if (e.target.dataset.tab) show(e.target.dataset.tab); };
+$('#nav').onclick = e => { const t = e.target.dataset.tab; if (!t) return; if (inGame && !confirm('Leave this exercise? Anything you already finished is saved.')) return; show(t); };
 
 function vToday(app) {
   const list = DAILY.map(actById), left = list.filter(a => !doneToday(a.id)), mins = left.reduce((x, a) => x + a.min, 0);
@@ -95,7 +98,7 @@ function vToday(app) {
       <div><b>${doneN}/${list.length}</b><span>done today</span></div>
       <div class="seg" aria-hidden="true">${list.map(a => `<i class="${doneToday(a.id) ? 'on' : ''}"></i>`).join('')}</div>
     </div>
-    <ol class="sheet">${list.map((a, i) => `<li class="row ${doneToday(a.id) ? 'done' : ''}"><span class="no">${String(i + 1).padStart(2, '0')}</span><div class="what"><h3>${a.name}</h3><span class="meta">${a.tag} · ${a.min} min</span></div><span class="meta">${doneToday(a.id) ? 'done' : ''}</span></li>`).join('')}</ol>
+    <ol class="sheet">${list.map((a, i) => `<li class="row ${doneToday(a.id) ? 'done' : ''}"><span class="no">${String(i + 1).padStart(2, '0')}</span><div class="what"><h2 class="item">${a.name}</h2><span class="meta">${a.tag} · ${a.min} min</span></div><span class="meta">${doneToday(a.id) ? 'done' : ''}</span></li>`).join('')}</ol>
     ${due ? `<p class="meta" style="margin-top:18px">${due} flashcard${due > 1 ? 's' : ''} due. <a href="#" id="cl">Review them</a></p>` : ''}
   </div>`));
   $('#go').onclick = () => { const ids = left.length ? left.map(a => a.id) : DAILY; launch(actById(ids[0]), { list: ids, i: 0 }); };
@@ -107,9 +110,10 @@ function vPractice(app) {
   const games = () => ACTS.filter(a => a.run && pickedCats.includes(a.cat)), mins = () => games().reduce((x, a) => x + a.min, 0);
   app.append(h(`<div><p class="eyebrow">Extra reps</p><h1>Practice</h1><p class="sub">Pick one or more categories. Every exercise in them runs back to back.</p>
     <div class="row-btns" id="cats" role="group" aria-label="Categories" style="justify-content:flex-start"></div><div id="plan"></div></div>`));
-  const draw = () => {
-    $('#cats').innerHTML = ''; CATS.forEach(c => { const n = ACTS.filter(a => a.cat === c && a.run).length, on = pickedCats.includes(c); const b = h(`<button class="btn ${on ? 'primary' : ''}" aria-pressed="${on}">${c} <span class="meta" style="color:inherit;opacity:.7">${n}</span></button>`); b.onclick = () => { pickedCats = on ? pickedCats.filter(x => x !== c) : [...pickedCats, c]; save(K.cats, pickedCats); draw(); }; $('#cats').append(b); });
-    const g = games(); $('#plan').innerHTML = g.length ? `<ol class="sheet">${g.map((a, i) => `<li class="row"><span class="no">${String(i + 1).padStart(2, '0')}</span><div class="what"><h3>${a.name}</h3><p>${a.desc}</p><span class="meta">${a.cat} · ${a.min} min</span></div></li>`).join('')}</ol>
+  const draw = (focusIdx) => {
+    $('#cats').innerHTML = ''; CATS.forEach(c => { const n = ACTS.filter(a => a.cat === c && a.run).length, on = pickedCats.includes(c); const b = h(`<button class="btn ${on ? 'primary' : ''}" aria-pressed="${on}">${c} <span class="meta" style="color:inherit;opacity:.7">${n}</span></button>`); b.onclick = () => { pickedCats = on ? pickedCats.filter(x => x !== c) : [...pickedCats, c]; save(K.cats, pickedCats); draw(CATS.indexOf(c)); }; $('#cats').append(b); });
+    if (focusIdx != null) $('#cats').children[focusIdx].focus();
+    const g = games(); $('#plan').innerHTML = g.length ? `<ol class="sheet">${g.map((a, i) => `<li class="row"><span class="no">${String(i + 1).padStart(2, '0')}</span><div class="what"><h2 class="item">${a.name}</h2><p>${a.desc}</p><span class="meta">${a.cat} · ${a.min} min</span></div></li>`).join('')}</ol>
       <div class="row-btns" style="justify-content:flex-start;margin-top:22px"><button class="btn primary big-btn" id="st">Start ${g.length} exercise${g.length > 1 ? 's' : ''} · about ${mins()} min</button></div>` : '<p class="sub">Select at least one category.</p>';
     if (g.length) $('#st').onclick = () => { const ids = g.map(a => a.id); launch(g[0], { list: ids, i: 0, practice: true }); };
     if (pickedCats.includes('Learning')) { $('#plan').insertAdjacentHTML('beforeend', '<p class="meta" style="margin-top:12px">Flashcards have their own tab. <a href="#" id="fc">Open</a></p>'); $('#fc').onclick = e => { e.preventDefault(); show('cards'); }; }
@@ -130,6 +134,7 @@ function launch(a, q) {
     $('#again').onclick = () => launch(a, q);
   };
   a.run($('#body'), finish, () => alive);
+  const bd = $('#body'); if (document.activeElement === document.body || !bd.contains(document.activeElement)) { bd.tabIndex = -1; bd.focus({ preventScroll: true }); }
 }
 
 /* ---------- flashcards ---------- */
@@ -174,7 +179,8 @@ function spark(v) {
   const pts = v.map((y, i) => `${(i / (v.length - 1) * w).toFixed(1)},${(ht - 3 - (y - lo) / rng * (ht - 6)).toFixed(1)}`).join(' '), last = pts.split(' ').pop().split(',');
   return `<svg width="${w}" height="${ht}" viewBox="0 0 ${w} ${ht}" role="img" aria-label="Trend over time"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="${last[0]}" cy="${last[1]}" r="2.6" fill="var(--acc)"/></svg>`;
 }
-function techReport() {
+function techReport() { try { return techReportInner(); } catch { return '<h2>Spotting manipulation</h2><p class="sub">Some saved data could not be read. Use Reset data below if this persists.</p>'; } }
+function techReportInner() {
   const st = manipStats(), by = {}; Object.values(st).forEach(e => { const x = by[e.t] ||= { n: 0, ok: 0 }; x.n += e.n; x.ok += e.ok; });
   const rows = TECH.filter(t => by[t.id]).map(t => ({ t, n: by[t.id].n, acc: Math.round(by[t.id].ok / by[t.id].n * 100) })).sort((a, b) => a.acc - b.acc);
   const missed = Object.entries(st).filter(([, e]) => e.last === false).map(([id, e]) => ({ s: SCEN.find(x => x.id === id), e })).filter(x => x.s).sort((a, b) => b.e.date.localeCompare(a.e.date)).slice(0, 5);
@@ -183,8 +189,8 @@ function techReport() {
   ${missed.length ? `<h2>Situations to revisit</h2>${missed.map(({ s, e }) => `<details class="lib"><summary>${esc(s.text.slice(0, 90))}…</summary><p>${esc(s.text)}</p><p class="meta">You said: ${esc(e.chosen ? labelFor(e.chosen) : 'unknown')} · Correct: ${esc(labelFor(s.t))}</p><p>${esc(s.why)}</p></details>`).join('')}` : ''}`;
 }
 function ics() {
-  const d = today().replace(/-/g, ''), url = location.href.split('#')[0];
-  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Brain Gym//EN', 'BEGIN:VEVENT', `UID:braingym-${d}@local`, `DTSTAMP:${d}T000000Z`, `DTSTART:${d}T090000`, 'DTEND:' + d + 'T091500', 'RRULE:FREQ=DAILY', 'SUMMARY:Brain Gym session (10 min)', `DESCRIPTION:${url}`, `URL:${url}`, 'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Brain Gym', 'TRIGGER:PT0M', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  const d = today().replace(/-/g, ''), url = /^https?:/.test(location.href) ? location.href.split('#')[0] : 'Brain Gym';
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Brain Gym//EN', 'BEGIN:VEVENT', `UID:braingym-${d}@local`, `DTSTAMP:${d}T000000Z`, `DTSTART:${d}T090000`, 'DTEND:' + d + 'T091500', 'RRULE:FREQ=DAILY', 'SUMMARY:Brain Gym session (10 min)', `DESCRIPTION:${url}`, `URL:${url}`, 'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Brain Gym', 'TRIGGER:PT0M', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR', ''].join('\r\n');
 }
 const REC_H = ['id', 'timestamp', 'date', 'activity', 'score', 'detail'];
 function vReport(app) {
@@ -208,16 +214,17 @@ function vReport(app) {
   <p class="meta" style="margin-top:8px">Trend compares your best day in the first 3 days with your best in the latest 3. Levels are folded in, so moving up a level counts as progress. Within 5% is steady.</p>
   ${techReport()}
   <h2>Last 14 days</h2><div class="chart" role="img" aria-label="Exercises completed per day, last 14 days">${days.map(d => `<div style="height:${cnt(d) / max * 100}%" title="${d}: ${cnt(d)}"><span>${d.slice(8)}</span></div>`).join('')}</div>
-  <h2 style="margin-top:44px">Your data</h2><div class="row-btns" style="justify-content:flex-start"><button class="btn" id="ex">Download CSV</button><button class="btn ghost" id="imp">Import CSV</button><button class="btn ghost" id="rem">Daily reminder (.ics)</button><input type="file" id="fi" accept=".csv" hidden></div>
+  <h2 style="margin-top:44px">Your data</h2><div class="row-btns" style="justify-content:flex-start"><button class="btn" id="ex">Download CSV</button><button class="btn ghost" id="imp">Import CSV</button><button class="btn ghost" id="rem">Daily reminder (.ics)</button><button class="btn ghost" id="rst">Reset data</button><input type="file" id="fi" accept=".csv" hidden></div>
   <p class="sub" id="dmsg">${serverUp ? 'Also saved automatically in <code>data/records.csv</code>.' : isLocal ? 'Server offline: data is in this browser only. Run <code>npm start</code> to also write CSV files.' : 'Your data lives only in this browser. Download a CSV now and then as a backup.'}</p></div>`));
   $('#ex').onclick = () => download(`brain-gym-${today()}.csv`, REC_H.join(',') + '\n' + records.map(r => Logic.csvLine(REC_H, r)).join(''));
+  $('#rst').onclick = () => { if (confirm('Delete ALL progress, levels and flashcards stored in this browser? Download a CSV first if you want a backup.') && confirm('Really delete everything?')) { [K.rec, K.cards, K.lvl, K.cats].forEach(k => { try { localStorage.removeItem(k); } catch { } }); records = []; cards = []; levels = {}; show('report'); $('#dmsg').textContent = 'Browser data cleared' + (serverUp ? '. CSV files in data/ were not touched.' : '.'); } };
   $('#rem').onclick = () => download('brain-gym-reminder.ics', ics(), 'text/calendar');
   $('#imp').onclick = () => $('#fi').click();
   $('#fi').onchange = async e => {
     const f = e.target.files[0]; if (!f) return;
     const ids = new Set(records.map(r => r.id)), known = new Set(ACTS.map(a => a.id)); let added = 0, bad = 0;
     Logic.parseCsv(await f.text()).forEach(r => {
-      if (!r.id || !/^\d{4}-\d\d-\d\d$/.test(r.date) || !known.has(r.activity) || !isFinite(+r.score)) { bad++; return; }
+      if (!r.id || !/^\d{4}-\d\d-\d\d$/.test(r.date) || !known.has(r.activity) || r.score === '' || !isFinite(+r.score)) { bad++; return; }
       if (!ids.has(r.id)) { records.push({ id: r.id, timestamp: r.timestamp || r.date + 'T00:00:00Z', date: r.date, activity: r.activity, score: +r.score, detail: r.detail || '{}' }); ids.add(r.id); added++; }
     });
     records.sort((a, b) => a.timestamp.localeCompare(b.timestamp)); save(K.rec, records); if (serverUp) post('api/records', records);

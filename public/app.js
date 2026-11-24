@@ -16,7 +16,7 @@ const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; 
 const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
 let records = load(K.rec, []), cards = load(K.cards, []), levels = load(K.lvl, {});
 let serverUp = false;
-const setSync = () => $('#sync').textContent = serverUp ? '💾 saving to localStorage + data/*.csv' : '💾 localStorage only (run `npm start` for CSV)';
+const setSync = () => $('#sync').textContent = serverUp ? 'saved to localStorage + data/*.csv' : 'localStorage only · run npm start for CSV';
 const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const level = (k, d) => levels[k] ?? d;
 const setLevel = (k, v) => { levels[k] = v; save(K.lvl, levels); };
@@ -45,17 +45,19 @@ async function boot() {
 
 /* ---------- activities ---------- */
 const ACTS = [
-  { id: 'breathe', icon: '🌬️', name: 'Box breathing', min: 1, tag: 'Calm · Focus', desc: '60s of 4-4-4-4 breathing lowers stress so the rest of the session works better.', run: gBreathe, unit: 's' },
-  { id: 'nback', icon: '🧩', name: 'Dual N-Back', min: 3, tag: 'Working memory', desc: 'Track a position AND a letter from N steps ago. Levels adapt to you.', run: gNback, unit: '%' },
-  { id: 'stroop', icon: '🎨', name: 'Stroop Focus', min: 1, tag: 'Attention · Inhibition', desc: 'Tap the INK colour, not the word. Trains your brain to ignore distractions.', run: gStroop, unit: '%' },
-  { id: 'seq', icon: '🔷', name: 'Sequence Memory', min: 2, tag: 'Visual-spatial memory', desc: 'Watch the pattern, repeat it. It grows by one each round.', run: gSeq, unit: ' len' },
-  { id: 'digits', icon: '🔢', name: 'Digit Span', min: 2, tag: 'Short-term memory', desc: 'Remember digits forward (or backward on odd days).', run: gDigits, unit: ' digits' },
-  { id: 'math', icon: '➗', name: 'Mental Math Sprint', min: 1, tag: 'Processing speed', desc: '60 seconds of arithmetic. Difficulty rises as you improve.', run: gMath, unit: ' solved' },
-  { id: 'recall', icon: '🏛️', name: 'Memory Palace', min: 3, tag: 'Method of loci', desc: 'Memorise 10 words by placing them along a familiar route, then recall.', run: gRecall, unit: '%' },
-  { id: 'feynman', icon: '📝', name: 'Feynman Journal', min: 3, tag: 'Deep understanding', desc: 'Explain one thing you learned today in plain words, as if teaching a kid.', run: gFeynman, unit: ' words' },
-  { id: 'cards', icon: '🗂️', name: 'Flashcards', min: 3, tag: 'Spaced repetition', desc: 'Review the cards due today (add your own in the Flashcards tab).', run: null, unit: ' cards' },
-  { id: 'habits', icon: '✅', name: 'Brain habits', min: 1, tag: 'Sleep · Exercise · Reading', desc: 'Log the daily basics that matter more than any game.', run: gHabits, unit: '/6' },
+  { id: 'breathe', cat: 'Calm', daily: true, track: false, icon: '', name: 'Box breathing', min: 1, tag: 'Calm · Focus', desc: '60s of 4-4-4-4 breathing lowers stress so the rest of the session works better.', run: gBreathe, unit: 's' },
+  { id: 'nback', cat: 'Memory', daily: true, track: true, icon: '', name: 'Dual N-Back', min: 3, tag: 'Working memory', desc: 'Track a position AND a letter from N steps ago. Levels adapt to you.', run: gNback, unit: '%' },
+  { id: 'stroop', cat: 'Focus', daily: true, track: true, icon: '', name: 'Stroop Focus', min: 1, tag: 'Attention · Inhibition', desc: 'Tap the INK colour, not the word. Trains your brain to ignore distractions.', run: gStroop, unit: '%' },
+  { id: 'seq', cat: 'Memory', daily: true, track: true, icon: '', name: 'Sequence Memory', min: 2, tag: 'Visual-spatial memory', desc: 'Watch the pattern, repeat it. It grows by one each round.', run: gSeq, unit: ' len' },
+  { id: 'digits', cat: 'Memory', daily: true, track: true, icon: '', name: 'Digit Span', min: 2, tag: 'Short-term memory', desc: 'Remember digits forward (or backward on odd days).', run: gDigits, unit: ' digits' },
+  { id: 'math', cat: 'Speed', daily: true, track: true, icon: '➗', name: 'Mental Math Sprint', min: 1, tag: 'Processing speed', desc: '60 seconds of arithmetic. Difficulty rises as you improve.', run: gMath, unit: ' solved' },
+  { id: 'recall', cat: 'Memory', daily: false, track: true, icon: '', name: 'Memory Palace', min: 3, tag: 'Method of loci', desc: 'Memorise 10 words by placing them along a familiar route, then recall.', run: gRecall, unit: '%' },
+  { id: 'feynman', cat: 'Learning', daily: false, track: false, icon: '', name: 'Feynman Journal', min: 3, tag: 'Deep understanding', desc: 'Explain one thing you learned today in plain words, as if teaching a kid.', run: gFeynman, unit: ' words' },
+  { id: 'cards', cat: 'Learning', daily: false, track: false, icon: '', name: 'Flashcards', min: 3, tag: 'Spaced repetition', desc: 'Review the cards due today (add your own in the Flashcards tab).', run: null, unit: ' cards' },
+  { id: 'habits', cat: 'Habits', daily: false, track: false, icon: '', name: 'Brain habits', min: 1, tag: 'Sleep · Exercise · Reading', desc: 'Log the daily basics that matter more than any game.', run: gHabits, unit: '/6' },
 ];
+const DAILY = ['breathe', 'nback', 'stroop', 'seq', 'digits', 'math'];
+const CATS = ['Memory', 'Focus', 'Speed', 'Learning', 'Habits', 'Calm'];
 const actById = id => ACTS.find(a => a.id === id);
 const doneToday = id => records.some(r => r.activity === id && r.date === today());
 const lastScore = id => { const r = [...records].reverse().find(r => r.activity === id); return r ? r.score : null; };
@@ -66,7 +68,7 @@ function show(tab) {
   cleanup(); cleanup = () => { };
   document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   const app = $('#app'); app.innerHTML = '';
-  ({ today: vToday, cards: vCards, progress: vProgress, library: vLibrary })[tab](app);
+  ({ today: vToday, practice: vPractice, report: vReport, cards: vCards, library: vLibrary })[tab](app);
 }
 $('#nav').onclick = e => { if (e.target.dataset.tab) show(e.target.dataset.tab); };
 
@@ -78,44 +80,52 @@ function streak() {
 }
 
 function vToday(app) {
-  const done = ACTS.filter(a => doneToday(a.id)).length, mins = ACTS.filter(a => !doneToday(a.id)).reduce((s, a) => s + a.min, 0);
-  const hr = new Date().getHours();
+  const list = DAILY.map(actById), left = list.filter(a => !doneToday(a.id)), mins = left.reduce((x, a) => x + a.min, 0);
+  const date = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  const due = cards.filter(c => c.due <= today()).length;
   app.append(h(`<div>
-    <h1>${hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening'} 👋</h1>
-    <p class="sub">${done === ACTS.length ? 'Full session complete — your brain is warm. Come back tomorrow.' : `About ${mins} minutes left. Do at least 3 activities to keep your streak.`}</p>
-    <div class="stats">
-      <div class="stat"><b>🔥 ${streak()}</b><span>day streak (≥3 activities)</span></div>
-      <div class="stat"><b>${done}/${ACTS.length}</b><span>done today</span></div>
-      <div class="stat"><b>${records.length}</b><span>total sessions logged</span></div>
-      <div class="stat"><b>${new Set(records.map(r => r.date)).size}</b><span>days trained</span></div>
+    <p class="eyebrow">${date}</p>
+    <h1 class="hero">${left.length ? 'Today\'s session.' : 'All done today.'}</h1>
+    <p class="lede">${left.length ? `${list.length} exercises, about ${mins} minutes. Same set every day, nothing to choose. Just press start.` : 'Nice work. Come back tomorrow, or open Practice for extra reps.'}</p>
+    <div class="row-btns" style="justify-content:flex-start;margin:0 0 28px"><button class="btn primary" id="go" style="padding:14px 30px;font-size:16px">${left.length ? (left.length < list.length ? 'Continue session' : 'Start session') : 'Run it again'}</button></div>
+    <div class="figs">
+      <div><b>${streak()}</b><span>day streak</span></div>
+      <div><b>${list.length - left.length}/${list.length}</b><span>done today</span></div>
+      <div class="seg">${list.map(a => `<i class="${doneToday(a.id) ? 'on' : ''}"></i>`).join('')}</div>
     </div>
-    <div class="bar"><i style="width:${done / ACTS.length * 100}%"></i></div>
-    <div class="grid" id="grid"></div>
-    <h2>🔭 Curiosity challenge of the day</h2>
-    <div class="lib"><p style="margin:0">${esc(dailyChallenge())}</p></div>
+    <ol class="sheet">${list.map((a, i) => `<li class="row ${doneToday(a.id) ? 'done' : ''}"><span class="no">${String(i + 1).padStart(2, '0')}</span><div class="what"><h3>${a.name}</h3><span class="meta">${a.tag} · ${a.min} min</span></div><span class="meta">${doneToday(a.id) ? 'done' : ''}</span></li>`).join('')}</ol>
+    ${due ? `<p class="meta">${due} flashcard${due > 1 ? 's' : ''} due in <a href="#" id="cl" style="color:var(--acc)">Flashcards</a></p>` : ''}
   </div>`));
-  const grid = $('#grid');
-  ACTS.forEach(a => {
-    const last = lastScore(a.id);
-    const c = h(`<div class="card ${doneToday(a.id) ? 'done' : ''}">
-      <span class="tag">${a.tag}</span><h3>${a.icon} ${a.name}</h3><p>${a.desc}</p>
-      <div class="row"><span class="chips"><span class="chip">${a.min} min</span>${last != null ? `<span class="chip">last ${last}${a.unit}</span>` : ''}</span>
-      <button class="btn ${doneToday(a.id) ? '' : 'primary'}">${doneToday(a.id) ? '✓ Again' : 'Start'}</button></div></div>`);
-    c.querySelector('button').onclick = () => a.run ? launch(a) : show('cards');
-    grid.append(c);
-  });
+  $('#go').onclick = () => { const ids = left.length ? left.map(a => a.id) : DAILY; launch(actById(ids[0]), { list: ids, i: 0, end: 'report' }); };
+  const cl = $('#cl'); if (cl) cl.onclick = e => { e.preventDefault(); show('cards'); };
 }
 
-function launch(a) {
+let pickedCats = load('braingym.cats.v1', ['Memory']);
+function vPractice(app) {
+  const games = () => ACTS.filter(a => a.run && pickedCats.includes(a.cat)), mins = () => games().reduce((x, a) => x + a.min, 0);
+  app.append(h(`<div><p class="eyebrow">Extra reps</p><h1>Practice</h1><p class="sub">Pick one or more categories. We line up every exercise in them and run them back to back.</p>
+    <div class="row-btns" id="cats" style="justify-content:flex-start"></div><div id="plan"></div></div>`));
+  const draw = () => {
+    $('#cats').innerHTML = ''; CATS.forEach(c => { const n = ACTS.filter(a => a.cat === c).length; const b = h(`<button class="btn ${pickedCats.includes(c) ? 'primary' : ''}">${c} <span class="meta" style="color:inherit;opacity:.7">${n}</span></button>`); b.onclick = () => { pickedCats = pickedCats.includes(c) ? pickedCats.filter(x => x !== c) : [...pickedCats, c]; save('braingym.cats.v1', pickedCats); draw(); }; $('#cats').append(b); });
+    const g = games(); $('#plan').innerHTML = g.length ? `<ol class="sheet">${g.map((a, i) => `<li class="row"><span class="no">${String(i + 1).padStart(2, '0')}</span><div class="what"><h3>${a.name}</h3><p>${a.desc}</p><span class="meta">${a.cat} · ${a.min} min</span></div></li>`).join('')}</ol>
+      <div class="row-btns" style="justify-content:flex-start;margin-top:22px"><button class="btn primary" id="st" style="padding:14px 30px;font-size:16px">Start ${g.length} exercise${g.length > 1 ? 's' : ''} · ~${mins()} min</button></div>` : '<p class="sub">Select at least one category.</p>';
+    if (g.length) $('#st').onclick = () => { const ids = g.map(a => a.id); launch(g[0], { list: ids, i: 0, end: 'report' }); };
+    if (pickedCats.includes('Learning')) $('#plan').insertAdjacentHTML('beforeend', '<p class="meta" style="margin-top:12px">Flashcards live in their own tab (<a href="#" id="fc" style="color:var(--acc)">open</a>).</p>'), $('#fc').onclick = e => { e.preventDefault(); show('cards'); };
+  }; draw();
+}
+
+function launch(a, q) {
   const app = $('#app'); app.innerHTML = ''; cleanup();
-  const stage = h(`<div class="stage"><div class="top"><span>${a.icon} ${a.name}</span><button class="btn ghost" id="quit">✕ Quit</button></div><div id="body"></div></div>`);
+  const stage = h(`<div class="stage"><div class="top"><span>${a.name}</span><span class="meta">${q ? `${q.i + 1} of ${q.list.length}` : ''}</span><button class="btn ghost" id="quit">Quit</button></div><div id="body"></div></div>`);
   app.append(stage);
   let alive = true; cleanup = () => { alive = false; };
-  $('#quit').onclick = () => show('today');
+  $('#quit').onclick = () => show(q ? 'today' : 'practice');
   const finish = (score, detail, extra = '') => {
     alive = false; addRecord(a.id, score, detail);
-    $('#body').innerHTML = `<div class="result">${score}${a.unit}</div><p class="msg">${extra}</p><div class="row-btns"><button class="btn primary" id="back">Back to plan</button><button class="btn" id="again">Play again</button></div>`;
-    $('#back').onclick = () => show('today'); $('#again').onclick = () => launch(a);
+    const nxt = q && q.list[q.i + 1] && actById(q.list[q.i + 1]);
+    $('#body').innerHTML = `<div class="result">${score}${a.unit}</div><p class="msg">${extra}</p><div class="row-btns">${nxt ? `<button class="btn primary" id="next">Next: ${nxt.name} →</button>` : `<button class="btn primary" id="rep">${q ? 'See report' : 'Back'}</button>`}<button class="btn" id="again">Retry</button></div>`;
+    if (nxt) $('#next').onclick = () => launch(nxt, { ...q, i: q.i + 1 }); else $('#rep').onclick = () => show(q ? 'report' : 'today');
+    $('#again').onclick = () => launch(a, q);
   };
   a.run($('#body'), finish, () => alive);
 }
@@ -159,7 +169,7 @@ function gNback(root, finish, alive) {
     }
     if (!alive()) return;
     const acc = Math.round(correct / dec * 100); const next = acc >= 85 ? n + 1 : acc < 65 ? Math.max(1, n - 1) : n; setLevel('nback', next);
-    finish(acc, { n, hits, misses, falseAlarms: fa }, `${n}-back · hits ${hits}, misses ${misses}, false alarms ${fa}. ${next > n ? '⬆️ Level up next time!' : next < n ? '⬇️ Easing down a level.' : 'Staying at this level.'}`);
+    finish(acc, { n, hits, misses, falseAlarms: fa }, `${n}-back · hits ${hits}, misses ${misses}, false alarms ${fa}. ${next > n ? 'Level up next time!' : next < n ? 'Easing down a level.' : 'Staying at this level.'}`);
   })();
 }
 
@@ -235,7 +245,7 @@ function gMath(root, finish, alive) {
   inp.onkeydown = e => { if (e.key !== 'Enter' || inp.value === '') return; tried++; if (+inp.value === a) solved++; inp.value = ''; $('#q').textContent = gen(); $('#m').textContent = `Solved: ${solved}`; };
   const iv = setInterval(() => {
     if (!alive()) return clearInterval(iv); left--; $('#tm').textContent = left;
-    if (left <= 0) { clearInterval(iv); const nl = solved >= 14 ? Math.min(5, lv + 1) : solved < 6 ? Math.max(1, lv - 1) : lv; setLevel('math', nl); finish(solved, { level: lv, tried }, `${solved}/${tried} correct at level ${lv}. ${nl > lv ? '⬆️ Level up!' : nl < lv ? '⬇️ Easing down.' : ''}`); }
+    if (left <= 0) { clearInterval(iv); const nl = solved >= 14 ? Math.min(5, lv + 1) : solved < 6 ? Math.max(1, lv - 1) : lv; setLevel('math', nl); finish(solved, { level: lv, tried }, `${solved}/${tried} correct at level ${lv}. ${nl > lv ? 'Level up!' : nl < lv ? 'Easing down.' : ''}`); }
   }, 1000);
 }
 
@@ -250,7 +260,7 @@ function gRecall(root, finish, alive) {
     root.innerHTML = `<p class="msg">Walk your route again. Type every word you remember (any order, separated by spaces or commas).</p><div class="field"><textarea id="ans" autofocus></textarea></div><div class="row-btns"><button class="btn primary" id="sub">Check</button></div>`;
     $('#sub').onclick = () => {
       const got = new Set($('#ans').value.toLowerCase().split(/[^a-z]+/)); const hit = words.filter(w => got.has(w)), miss = words.filter(w => !got.has(w));
-      finish(Math.round(hit.length / 10 * 100), { hit: hit.length, missed: miss }, `${hit.length}/10 recalled.${miss.length ? ' Missed: ' + miss.join(', ') : ' Perfect! 🏆'}`);
+      finish(Math.round(hit.length / 10 * 100), { hit: hit.length, missed: miss }, `${hit.length}/10 recalled.${miss.length ? ' Missed: ' + miss.join(', ') : ' Perfect! '}`);
     };
   };
   $('#go').onclick = go;
@@ -268,15 +278,15 @@ function gFeynman(root, finish) {
 }
 
 function gHabits(root, finish) {
-  const items = ['😴 Slept 7+ hours', '🏃 20+ min exercise / brisk walk', '📖 Read 20+ min', '🎯 One 45-min deep-work block, phone away', '💧 Drank enough water', '🌳 Learned or tried something new'];
+  const items = ['Slept 7+ hours', '20+ min exercise / brisk walk', 'Read 20+ min', 'One 45-min deep-work block, phone away', 'Drank enough water', 'Learned or tried something new'];
   root.innerHTML = `<p class="msg">Tick what you did (or will do) today. Sleep and exercise have the strongest evidence for brain health.</p>${items.map((t, i) => `<label class="check"><input type="checkbox" data-i="${i}"> ${t}</label>`).join('')}<div class="row-btns"><button class="btn primary" id="sv">Save</button></div>`;
-  $('#sv').onclick = () => { const on = [...root.querySelectorAll('input:checked')].map(c => items[c.dataset.i]); finish(on.length, { done: on }, on.length >= 5 ? 'Brain-friendly day! 🌟' : 'Every tick counts.'); };
+  $('#sv').onclick = () => { const on = [...root.querySelectorAll('input:checked')].map(c => items[c.dataset.i]); finish(on.length, { done: on }, on.length >= 5 ? 'Brain-friendly day! ' : 'Every tick counts.'); };
 }
 
 /* ---------- flashcards (SM-2 lite) ---------- */
 function vCards(app) {
   const due = () => cards.filter(c => c.due <= today());
-  app.append(h(`<div><h1>🗂️ Flashcards</h1><p class="sub">Spaced repetition: recalling a card right before you'd forget it is the most efficient way to build long-term memory.</p>
+  app.append(h(`<div><h1>Flashcards</h1><p class="sub">Spaced repetition: recalling a card right before you'd forget it is the most efficient way to build long-term memory.</p>
   <div class="stats"><div class="stat"><b>${cards.length}</b><span>total cards</span></div><div class="stat"><b>${due().length}</b><span>due today</span></div></div>
   <div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="rev" ${due().length ? '' : 'disabled'}>Review ${due().length} due</button></div>
   <div class="lib" id="rv" hidden></div>
@@ -303,15 +313,38 @@ function vCards(app) {
 }
 
 /* ---------- progress ---------- */
-function vProgress(app) {
-  const days = Array.from({ length: 14 }, (_, i) => addDays(today(), i - 13));
-  const cnt = d => new Set(records.filter(r => r.date === d).map(r => r.activity)).size, max = Math.max(1, ...days.map(cnt));
-  app.append(h(`<div><h1>📈 Progress</h1><p class="sub">Activities completed per day (last 14 days)</p>
-  <div class="chart" style="margin-bottom:30px">${days.map(d => `<div style="height:${cnt(d) / max * 100}%" title="${d}: ${cnt(d)}"><span>${d.slice(8)}</span></div>`).join('')}</div>
-  <h2>Per activity</h2><table><tr><th>Activity</th><th>Sessions</th><th>Last</th><th>Best</th><th>Avg (last 7)</th></tr>
-  ${ACTS.map(a => { const rs = records.filter(r => r.activity === a.id), sc = rs.map(r => +r.score), l7 = sc.slice(-7); return `<tr><td>${a.icon} ${a.name}</td><td>${rs.length}</td><td>${sc.length ? sc.at(-1) : '–'}</td><td>${sc.length ? Math.max(...sc) : '–'}</td><td>${l7.length ? (l7.reduce((x, y) => x + y, 0) / l7.length).toFixed(1) : '–'}</td></tr>`; }).join('')}</table>
-  <h2>Your data</h2><div class="row-btns" style="justify-content:flex-start"><button class="btn" id="ex">⬇️ Download CSV</button><button class="btn ghost" id="imp">⬆️ Import CSV</button><input type="file" id="fi" accept=".csv" hidden></div>
-  <p class="sub">${serverUp ? 'Also saved automatically in <code>data/records.csv</code> in the project folder.' : 'Server not running — data is in this browser only. Run <code>npm start</code> to also write CSV files.'}</p></div>`));
+function spark(v) {
+  if (v.length < 2) return '';
+  const lo = Math.min(...v), hi = Math.max(...v), w = 110, ht = 28, rng = hi - lo || 1;
+  const pts = v.map((y, i) => `${(i / (v.length - 1) * w).toFixed(1)},${(ht - 3 - (y - lo) / rng * (ht - 6)).toFixed(1)}`).join(' ');
+  const last = pts.split(' ').pop().split(',');
+  return `<svg width="${w}" height="${ht}" viewBox="0 0 ${w} ${ht}"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="${last[0]}" cy="${last[1]}" r="2.6" fill="var(--acc)"/></svg>`;
+}
+const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+function vReport(app) {
+  const wk = off => { const days = Array.from({ length: 7 }, (_, i) => addDays(today(), -off * 7 - i)); return records.filter(r => days.includes(r.date)); };
+  const tw = wk(0), lw = wk(1);
+  const rows = ACTS.filter(a => a.run || a.id === 'cards').map(a => {
+    const rs = records.filter(r => r.activity === a.id), sc = rs.map(r => +r.score);
+    let trend = null, pct = 0;
+    if (a.track && sc.length >= 4) { const f = avg(sc.slice(0, 3)), l = avg(sc.slice(-3)); pct = f ? (l - f) / f * 100 : 0; trend = pct >= 5 ? 'up' : pct <= -5 ? 'down' : 'flat'; }
+    let lvl = ''; const d = rs.length ? (() => { try { return JSON.parse(rs.at(-1).detail); } catch { return {}; } })() : {};
+    if (a.id === 'nback' && d.n) lvl = `${d.n}-back`; if (a.id === 'math' && d.level) lvl = `level ${d.level}`;
+    return { a, rs, sc, trend, pct, lvl };
+  }).filter(r => r.rs.length || r.a.track);
+  const up = rows.filter(r => r.trend === 'up').map(r => r.a.name), down = rows.filter(r => r.trend === 'down').map(r => r.a.name), ready = rows.filter(r => r.trend).length;
+  const days = Array.from({ length: 14 }, (_, i) => addDays(today(), i - 13)), cnt = d => new Set(records.filter(r => r.date === d).map(r => r.activity)).size, max = Math.max(1, ...days.map(cnt));
+  const label = { up: 'Improving', down: 'Slipping', flat: 'Steady' };
+  app.append(h(`<div><p class="eyebrow">Report</p><h1>Are you improving?</h1>
+  <p class="lede">${!records.length ? 'No data yet. Finish a session and come back.' : !ready ? 'Trends appear after 4 sessions of an exercise. Keep going; consistency comes first.' : `${up.length ? 'Improving: ' + up.join(', ') + '. ' : ''}${down.length ? 'Slipping: ' + down.join(', ') + '. ' : ''}${!up.length && !down.length ? 'Holding steady so far. That is normal early on.' : ''}`}</p>
+  <div class="figs"><div><b>${streak()}</b><span>day streak</span></div><div><b>${new Set(tw.map(r => r.date)).size}/7</b><span>days trained this week</span></div><div><b>${tw.length}</b><span>exercises this week</span><span style="display:block">${lw.length ? `last week ${lw.length}` : ''}</span></div><div><b>${new Set(records.map(r => r.date)).size}</b><span>days total</span></div></div>
+  <h2>Per exercise</h2>
+  <table><tr><th>Exercise</th><th>Runs</th><th>Best</th><th>Now</th><th>Trend</th><th></th></tr>${rows.map(r => `<tr><td>${r.a.name}${r.lvl ? `<br><span class="meta">${r.lvl}</span>` : ''}</td><td>${r.rs.length}</td><td>${r.sc.length ? Math.max(...r.sc) : '–'}</td><td>${r.sc.length ? r.sc.at(-1) : '–'}</td>
+    <td style="color:${r.trend === 'up' ? 'var(--good)' : r.trend === 'down' ? 'var(--acc)' : 'var(--mute)'}">${r.trend ? `${label[r.trend]} ${r.pct > 0 ? '+' : ''}${r.pct.toFixed(0)}%` : r.a.track ? `<span class="meta">needs ${Math.max(0, 4 - r.sc.length)} more</span>` : '<span class="meta">log only</span>'}</td><td style="color:var(--mute)">${spark(r.sc.slice(-20))}</td></tr>`).join('')}</table>
+  <p class="meta" style="margin-top:8px">Trend compares the average of your first 3 runs with your latest 3. Within ±5% counts as steady.</p>
+  <h2>Last 14 days</h2><div class="chart" style="margin-bottom:34px">${days.map(d => `<div style="height:${cnt(d) / max * 100}%" title="${d}: ${cnt(d)}"><span>${d.slice(8)}</span></div>`).join('')}</div>
+  <h2>Your data</h2><div class="row-btns" style="justify-content:flex-start"><button class="btn" id="ex">Download CSV</button><button class="btn ghost" id="imp">Import CSV</button><input type="file" id="fi" accept=".csv" hidden></div>
+  <p class="sub">${serverUp ? 'Also saved automatically in <code>data/records.csv</code>.' : 'Server not running, so data is in this browser only. Run <code>npm start</code> to also write CSV files.'}</p></div>`));
   $('#ex').onclick = () => {
     const q = v => { let s = String(v ?? ''); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const csv = 'id,timestamp,date,activity,score,detail\n' + records.map(r => [r.id, r.timestamp, r.date, r.activity, r.score, r.detail].map(q).join(',')).join('\n');
@@ -321,9 +354,10 @@ function vProgress(app) {
   $('#fi').onchange = async e => {
     const lines = (await e.target.files[0].text()).split('\n').slice(1).filter(Boolean); let added = 0; const ids = new Set(records.map(r => r.id));
     lines.forEach(l => { const m = l.match(/("([^"]|"")*"|[^,]*)(,|$)/g)?.map(x => x.replace(/,$/, '').replace(/^"|"$/g, '').replace(/""/g, '"')); if (m && m.length >= 5 && !ids.has(m[0])) { records.push({ id: m[0], timestamp: m[1], date: m[2], activity: m[3], score: +m[4], detail: m[5] || '{}' }); added++; } });
-    save(K.rec, records); if (serverUp) post('/api/records', records); alert(`Imported ${added} new rows`); show('progress');
+    save(K.rec, records); if (serverUp) post('/api/records', records); alert(`Imported ${added} new rows`); show('report');
   };
 }
+
 
 /* ---------- library ---------- */
 const CHALLENGES = ['Take a different route today and notice 5 new things.', 'Learn 5 words in a language you are curious about.', 'Draw (badly!) a diagram of something you understand.', 'Play one game of chess or solve a puzzle you have never tried.', 'Write with your non-dominant hand for 2 minutes.', 'Cook a recipe you have never made without looking at your phone mid-way.', 'Ask someone an interesting question and listen for 10 minutes.', 'Read 10 pages of a book outside your usual topics.', 'Memorise a short poem or a 20-digit number using a memory palace.', 'Teach someone a concept you learned this week.', 'Go for a 30-minute walk with no podcast or music — let your mind wander.', 'Learn a card trick or a simple instrument riff.', 'Estimate the answers to 5 everyday numbers before googling them.'];
@@ -344,9 +378,9 @@ const LIB = [
   ['Mindfulness & box breathing', 'Mindfulness-based stress reduction research (Kabat-Zinn)', 'Short breath practice reduces stress and improves attention control.', 'Box breathing'],
 ];
 function vLibrary(app) {
-  app.append(h(`<div><h1>📚 Library</h1><p class="sub">The research and books behind each exercise.</p>
+  app.append(h(`<div><h1>Library</h1><p class="sub">The research and books behind each exercise.</p>
   <div class="note"><b>Honest take:</b> "brain training" games mostly make you better at the games themselves; far transfer is modest. What's best evidenced for sharper thinking is <b>exercise, sleep, retrieval practice, learning genuinely new hard things</b>, and social engagement. That's why this app mixes games with study techniques and habits — and adds a daily curiosity challenge.</div>
-  ${LIB.map(l => `<div class="lib"><h3>${esc(l[0])}</h3><p class="sub" style="margin:0 0 6px">📖 ${esc(l[1])}</p><p style="margin:0 0 6px">${esc(l[2])}</p><span class="chip">In app: ${esc(l[3])}</span></div>`).join('')}</div>`));
+  ${LIB.map(l => `<div class="lib"><h3>${esc(l[0])}</h3><p class="sub" style="margin:0 0 6px">${esc(l[1])}</p><p style="margin:0 0 6px">${esc(l[2])}</p><span class="chip">In app: ${esc(l[3])}</span></div>`).join('')}</div>`));
 }
 
 boot();

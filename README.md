@@ -8,7 +8,13 @@ npm start        # → http://localhost:3000   (needs Node 18+)
 ```
 Data is saved to **localStorage** (always) and to **`data/records.csv`** + **`data/cards.csv`** (when the server runs). CSVs are git-ignored so your personal data stays on your machine. You can also export/import CSV from the Progress tab.
 
-## Daily session
+## Pages
+- **Today** — a fixed 6-exercise session (~10 min). Press start; it runs them back to back. No choosing.
+- **Practice** — pick one or more categories (Memory, Focus, Speed, Learning, Habits, Calm) and run everything in them.
+- **Report** — streak, weekly activity, and per-exercise trend (first 3 runs vs latest 3) with sparklines.
+- **Flashcards** / **Library** — spaced-repetition deck and the research behind each exercise.
+
+## All exercises
 | Activity | Trains | Based on |
 |---|---|---|
 | Box breathing | calm, attention | mindfulness research |
@@ -26,7 +32,7 @@ Plus a daily curiosity challenge and a Library tab linking every exercise to its
 
 **Honest note:** game-style training mostly improves the games themselves. The best-evidenced boosts to cognition are exercise, sleep, retrieval practice and learning new hard things — so the app blends all of them.
 
-Streak = days with ≥3 activities completed.
+Streak = days with ≥3 exercises completed.
 
 ## Ideas to extend
 New games (Tower of Hanoi, word-chain, pattern logic), a weekly review, reminders, charts per game.

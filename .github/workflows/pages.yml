@@ -33,5 +33,7 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: public
+      - name: Let the artifact become visible (avoids a known race)
+        run: sleep 20
       - id: deployment
         uses: actions/deploy-pages@v4

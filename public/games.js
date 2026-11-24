@@ -214,11 +214,13 @@ function gLesson(root, finish) {
 }
 
 function gManip(root, finish, alive) {
-  const $ = s => root.querySelector(s), picked = pickScenarios(); let i = 0; const results = [];
-  let keyH = null; const prev = cleanup; cleanup = () => { if (keyH) document.removeEventListener('keydown', keyH); prev(); };
+  const $ = s => root.querySelector(s), picked = pickScenarios(); let i = 0, saved = false; const results = [];
+  // Leaving mid-session (Quit, nav tab) must not throw away answers you already gave: save them as a partial run.
+  let keyH = null; const prev = cleanup;
+  cleanup = () => { if (keyH) document.removeEventListener('keydown', keyH); if (!saved && results.length) { saved = true; addRecord('manip', Math.round(avg(results.map(r => r.pts))), { results, partial: true }); } prev(); };
   const round = () => {
     if (!alive()) return;
-    if (i >= picked.length) return finish(Math.round(avg(results.map(r => r.pts))), { results }, `${results.filter(r => r.correct).length} of ${results.length} named correctly.`);
+    if (i >= picked.length) { saved = true; return finish(Math.round(avg(results.map(r => r.pts))), { results }, `${results.filter(r => r.correct).length} of ${results.length} named correctly.`); }
     const sc = picked[i], opts = optionsFor(sc); let chosen = null;
     root.innerHTML = `<div style="text-align:left"><p class="eyebrow">Situation ${i + 1} of ${picked.length}${sc.lvl === 2 ? ' · harder' : ''}</p><p class="serif" id="sit" style="font-size:22px;margin-bottom:22px">${esc(sc.text)}</p>
     <p class="eyebrow" id="q1">1 · What is going on here? (keys 1-${opts.length}, or arrow keys)</p><div id="op" role="radiogroup" aria-labelledby="q1" aria-describedby="sit" class="opts"></div>

@@ -19,6 +19,9 @@ A daily, local-first brain workout. About 10 minutes, no accounts, no dependenci
 - The first situation is yesterday's technique (a delayed recall, not a giveaway). Then come the ones you miss most. Harder situations unlock after 9+ answers at 65%+ accuracy.
 - Format follows the prebunking research (Roozenbeek et al., 2022, Science Advances): name the pattern, show it in context, practise spotting it.
 
+## How the content was checked
+An independent reviewer labelled all 78 situations blind (without seeing my labels, only the technique definitions): 78 of 78 matched. Ambiguous cases it flagged were rewritten. `npm test` also verifies every situation can earn full marks and that keys cannot be satisfied by filler.
+
 ## AI coach (optional, bring your own key)
 Add an Anthropic or OpenAI key in the Coach tab to get: feedback on your reasoning after each situation, a weekly review, "what is holding me back?", and follow-up chat.
 - The key is never in this repo. It is kept in `sessionStorage` (this tab only) unless you tick "Remember on this device".

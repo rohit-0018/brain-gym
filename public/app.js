@@ -70,7 +70,7 @@ const ACTS = [
 const DAILY = ['breathe', 'lesson', 'manip', 'nback', 'stroop', 'math'];
 const CATS = ['Influence', 'Memory', 'Focus', 'Speed', 'Learning', 'Habits', 'Calm'];
 const actById = id => ACTS.find(a => a.id === id);
-const doneToday = id => records.some(r => r.activity === id && r.date === today());
+const doneToday = id => records.some(r => r.activity === id && r.date === today() && !String(r.detail).includes('"partial":true'));
 const streak = () => Logic.streakOf(records, today());
 
 /* ---------- views ---------- */
@@ -185,7 +185,8 @@ function techReportInner() {
   const rows = TECH.filter(t => by[t.id]).map(t => ({ t, n: by[t.id].n, acc: Math.round(by[t.id].ok / by[t.id].n * 100) })).sort((a, b) => a.acc - b.acc);
   const missed = Object.entries(st).filter(([, e]) => e.last === false).map(([id, e]) => ({ s: SCEN.find(x => x.id === id), e })).filter(x => x.s).sort((a, b) => b.e.date.localeCompare(a.e.date)).slice(0, 5);
   if (!rows.length) return '<h2>Spotting manipulation</h2><p class="sub">No attempts yet. Finish a daily session to start tracking which techniques you recognise.</p>';
-  return `<h2>Spotting manipulation</h2><p class="sub">${rows.length} of ${TECH.length} techniques seen. Weakest first. These come up more often in your sessions.</p><div class="tscroll"><table><tr><th>Technique</th><th>Seen</th><th>Correct</th></tr>${rows.map(r => `<tr><td>${esc(r.t.name)}</td><td>${r.n}</td><td style="color:${r.acc >= 70 ? 'var(--good)' : r.acc < 50 ? 'var(--acc)' : 'var(--mute)'}">${r.acc}%</td></tr>`).join('')}</table></div>
+  const att = Object.values(st).reduce((x, e) => x + e.n, 0), okN = Object.values(st).reduce((x, e) => x + e.ok, 0), hard = att >= 9 && okN / att >= .65;
+  return `<h2>Spotting manipulation</h2><p class="sub">${rows.length} of ${TECH.length} techniques seen. Weakest first. These come up more often in your sessions.</p><p class="meta">Harder situations: ${hard ? 'unlocked' : `locked until you have answered 9 at 65% or better (you are at ${att} answers, ${att ? Math.round(okN / att * 100) : 0}%)`}.</p><div class="tscroll"><table><tr><th>Technique</th><th>Seen</th><th>Correct</th></tr>${rows.map(r => `<tr><td>${esc(r.t.name)}</td><td>${r.n}</td><td style="color:${r.acc >= 70 ? 'var(--good)' : r.acc < 50 ? 'var(--acc)' : 'var(--mute)'}">${r.acc}%</td></tr>`).join('')}</table></div>
   ${missed.length ? `<h2>Situations to revisit</h2>${missed.map(({ s, e }) => `<details class="lib"><summary>${esc(s.text.slice(0, 90))}…</summary><p>${esc(s.text)}</p><p class="meta">You said: ${esc(e.chosen ? labelFor(e.chosen) : 'unknown')} · Correct: ${esc(labelFor(s.t))}</p><p>${esc(s.why)}</p></details>`).join('')}` : ''}`;
 }
 function ics() {
@@ -237,7 +238,7 @@ const nameOfId = id => id === 'fair' ? FAIR.short : techById(id) ? shortName(tec
 function insightLines(f) {
   if (f.answers < 6) return [`You have answered ${f.answers} situation${f.answers === 1 ? '' : 's'} so far. Patterns need about 6 or more, so keep going.`];
   const L = [`Overall you name the right technique ${f.accuracyPct}% of the time (${f.answers} answers).`];
-  f.topConfusions.forEach(c => L.push(`You keep reading <b>${esc(c.actual)}</b> as <b>${esc(c.chosen)}</b> (${c.times}×). Look for the signal that separates them.`));
+  f.topConfusions.filter(c => c.actual !== FAIR.short && c.chosen !== FAIR.short).forEach(c => L.push(`You keep reading <b>${esc(c.actual)}</b> as <b>${esc(c.chosen)}</b> (${c.times}×). Look for the signal that separates them.`));
   if (f.overTrusting > f.overSuspicious && f.overTrusting >= 2) L.push(`You called manipulation "fair" ${f.overTrusting} times. You may be giving people too much benefit of the doubt.`);
   else if (f.overSuspicious > f.overTrusting && f.overSuspicious >= 2) L.push(`You saw manipulation in a fair request ${f.overSuspicious} times. Plain asks with a clear way out are not manipulation.`);
   if (f.avgWordsWhenWrong != null && f.avgWordsWhenCorrect != null && f.avgWordsWhenWrong + 3 < f.avgWordsWhenCorrect) L.push(`Your explanations are shorter when you get it wrong (${f.avgWordsWhenWrong} vs ${f.avgWordsWhenCorrect} words). Slow down and name two specific signals before choosing.`);

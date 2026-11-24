@@ -8,9 +8,10 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<a class="skip" href="#app">Skip to content</a>
 <header>
   <div class="brand">Brain Gym<i></i></div>
-  <nav id="nav">
+  <nav id="nav" aria-label="Sections">
     <button data-tab="today" class="on">Today</button>
     <button data-tab="practice">Practice</button>
     <button data-tab="report">Report</button>
@@ -20,7 +21,9 @@
   <div id="sync" title="Data storage status">…</div>
 </header>
 <main id="app"></main>
+<script src="logic.js"></script>
 <script src="manip.js"></script>
+<script src="games.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

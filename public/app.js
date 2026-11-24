@@ -1,22 +1,28 @@
 'use strict';
-/* Brain Gym — data lives in localStorage AND (when run via `npm start`) data/*.csv */
+/* Brain Gym core. Data lives in localStorage, and also in data/*.csv when run locally with `npm start`. */
 const $ = (s, r = document) => r.querySelector(s);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rnd = n => Math.floor(Math.random() * n);
 const pick = a => a[rnd(a.length)];
 const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1);[a[i], a[j]] = [a[j], a[i]]; } return a; };
-const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv'); };
-const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstChild; };
+const today = () => Logic.isoOf(new Date());
+const addDays = Logic.addDays, avg = Logic.avg;
+const h = html => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstChild; };
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const isLocal = ['localhost', '127.0.0.1', ''].includes(location.hostname);
 
 /* ---------- storage ---------- */
-const K = { rec: 'braingym.records.v1', cards: 'braingym.cards.v1', lvl: 'braingym.levels.v1' };
+const K = { rec: 'braingym.records.v1', cards: 'braingym.cards.v1', lvl: 'braingym.levels.v1', cats: 'braingym.cats.v1' };
+let storageOK = true;
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
-const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { storageOK = false; setSync(); } };
 let records = load(K.rec, []), cards = load(K.cards, []), levels = load(K.lvl, {});
 let serverUp = false;
-const setSync = () => $('#sync').textContent = serverUp ? 'saved to localStorage + data/*.csv' : 'localStorage only · run npm start for CSV';
+function setSync() {
+  const el = $('#sync'); if (!el) return;
+  el.style.color = storageOK ? '' : 'var(--acc)';
+  el.textContent = !storageOK ? 'Browser storage is blocked: progress will not be kept' : serverUp ? 'Saving to this browser and data/*.csv' : isLocal ? 'Saved in this browser (server offline)' : 'Saved in this browser · export from Report to back up';
+}
 const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const level = (k, d) => levels[k] ?? d;
 const setLevel = (k, v) => { levels[k] = v; save(K.lvl, levels); };
@@ -24,342 +30,136 @@ const setLevel = (k, v) => { levels[k] = v; save(K.lvl, levels); };
 function addRecord(activity, score, detail = {}) {
   const r = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), timestamp: new Date().toISOString(), date: today(), activity, score, detail: JSON.stringify(detail) };
   records.push(r); save(K.rec, records);
-  if (serverUp) post('/api/records', [r]).catch(() => { serverUp = false; setSync(); });
+  if (serverUp) post('api/records', [r]).catch(() => { serverUp = false; setSync(); });
   return r;
 }
-const saveCards = () => { save(K.cards, cards); if (serverUp) post('/api/cards', cards).catch(() => { }); };
+const saveCards = () => { save(K.cards, cards); if (serverUp) post('api/cards', cards).catch(() => { }); };
 
-async function boot() {
+async function probe() { // optional local server: short timeout, must answer JSON, never blocks first paint
+  const get = async u => { const c = new AbortController(), t = setTimeout(() => c.abort(), 1500); try { const r = await fetch(u, { signal: c.signal }); if (!r.ok || !(r.headers.get('content-type') || '').includes('json')) throw 0; return await r.json(); } finally { clearTimeout(t); } };
   try {
-    const [sr, sc] = await Promise.all([fetch('/api/records').then(r => r.json()), fetch('/api/cards').then(r => r.json())]);
-    serverUp = true;
-    const ids = new Set(records.map(r => r.id));
-    sr.forEach(r => { if (!ids.has(r.id)) records.push({ ...r, score: Number(r.score) }); });
+    const [sr, sc] = await Promise.all([get('api/records'), get('api/cards')]);
+    serverUp = true; const ids = new Set(records.map(r => r.id)); let added = 0;
+    sr.forEach(r => { if (!ids.has(r.id)) { records.push({ ...r, score: Number(r.score) }); added++; } });
     records.sort((a, b) => a.timestamp.localeCompare(b.timestamp)); save(K.rec, records);
-    await post('/api/records', records); // push anything only the browser has
+    await post('api/records', records);
     if (!cards.length && sc.length) cards = sc.map(c => ({ ...c, interval: +c.interval, ease: +c.ease, reps: +c.reps }));
-    saveCards();
-  } catch { serverUp = false; }
-  setSync(); show('today');
+    saveCards(); setSync();
+    if (added && !inGame) show(currentTab);
+  } catch { serverUp = false; setSync(); }
 }
 
 /* ---------- activities ---------- */
 const ACTS = [
-  { id: 'breathe', cat: 'Calm', daily: true, track: false, icon: '', name: 'Box breathing', min: 1, tag: 'Calm · Focus', desc: '60s of 4-4-4-4 breathing lowers stress so the rest of the session works better.', run: gBreathe, unit: 's' },
-  { id: 'lesson', cat: 'Influence', daily: true, track: false, name: 'Technique of the day', min: 1, tag: 'Influence · Learn', desc: 'One manipulation or persuasion technique: how it works, how to spot it, how to counter it.', run: gLesson, unit: ' words' },
-  { id: 'manip', cat: 'Influence', daily: true, track: true, name: 'Spot the technique', min: 3, tag: 'Influence · Reasoning', desc: 'Read a real-life situation, name the technique, and explain your reasoning.', run: gManip, unit: '/100' },
-  { id: 'nback', cat: 'Memory', daily: true, track: true, icon: '', name: 'Dual N-Back', min: 3, tag: 'Working memory', desc: 'Track a position AND a letter from N steps ago. Levels adapt to you.', run: gNback, unit: '%' },
-  { id: 'stroop', cat: 'Focus', daily: true, track: true, icon: '', name: 'Stroop Focus', min: 1, tag: 'Attention · Inhibition', desc: 'Tap the INK colour, not the word. Trains your brain to ignore distractions.', run: gStroop, unit: '%' },
-  { id: 'seq', cat: 'Memory', daily: true, track: true, icon: '', name: 'Sequence Memory', min: 2, tag: 'Visual-spatial memory', desc: 'Watch the pattern, repeat it. It grows by one each round.', run: gSeq, unit: ' len' },
-  { id: 'digits', cat: 'Memory', daily: true, track: true, icon: '', name: 'Digit Span', min: 2, tag: 'Short-term memory', desc: 'Remember digits forward (or backward on odd days).', run: gDigits, unit: ' digits' },
-  { id: 'math', cat: 'Speed', daily: true, track: true, icon: '➗', name: 'Mental Math Sprint', min: 1, tag: 'Processing speed', desc: '60 seconds of arithmetic. Difficulty rises as you improve.', run: gMath, unit: ' solved' },
-  { id: 'recall', cat: 'Memory', daily: false, track: true, icon: '', name: 'Memory Palace', min: 3, tag: 'Method of loci', desc: 'Memorise 10 words by placing them along a familiar route, then recall.', run: gRecall, unit: '%' },
-  { id: 'feynman', cat: 'Learning', daily: false, track: false, icon: '', name: 'Feynman Journal', min: 3, tag: 'Deep understanding', desc: 'Explain one thing you learned today in plain words, as if teaching a kid.', run: gFeynman, unit: ' words' },
-  { id: 'cards', cat: 'Learning', daily: false, track: false, icon: '', name: 'Flashcards', min: 3, tag: 'Spaced repetition', desc: 'Review the cards due today (add your own in the Flashcards tab).', run: null, unit: ' cards' },
-  { id: 'habits', cat: 'Habits', daily: false, track: false, icon: '', name: 'Brain habits', min: 1, tag: 'Sleep · Exercise · Reading', desc: 'Log the daily basics that matter more than any game.', run: gHabits, unit: '/6' },
+  { id: 'breathe', cat: 'Calm', track: false, name: 'Box breathing', min: 1, tag: 'Calm and focus', desc: 'Sixty seconds of 4-4-4-4 breathing to settle before you work.', run: gBreathe, unit: 's' },
+  { id: 'lesson', cat: 'Influence', track: false, name: 'Technique of the day', min: 1, tag: 'Influence · Learn', desc: 'One manipulation or persuasion technique: how it works, how to spot it, how to counter it.', run: gLesson, unit: ' words' },
+  { id: 'manip', cat: 'Influence', track: true, name: 'Spot the technique', min: 3, tag: 'Influence · Reasoning', desc: 'Read a real-life situation, name the technique (or call it fair), and explain your reasoning.', run: gManip, unit: '/100' },
+  { id: 'nback', cat: 'Memory', track: true, name: 'Dual N-Back', min: 3, tag: 'Working memory', desc: 'Track a position and a letter from N steps ago. The level adapts to you.', run: gNback, unit: '/100' },
+  { id: 'stroop', cat: 'Focus', track: true, name: 'Stroop Focus', min: 1, tag: 'Attention · Inhibition', desc: 'Tap the ink colour, not the word. Practice at ignoring the automatic answer.', run: gStroop, unit: '%' },
+  { id: 'seq', cat: 'Memory', track: true, name: 'Sequence Memory', min: 2, tag: 'Visual-spatial memory', desc: 'Watch the pattern, repeat it. It grows by one each round.', run: gSeq, unit: ' long' },
+  { id: 'digits', cat: 'Memory', track: true, name: 'Digit Span', min: 2, tag: 'Short-term memory', desc: 'Remember digits forward, or backward on odd dates.', run: gDigits, unit: ' digits' },
+  { id: 'math', cat: 'Speed', track: true, name: 'Mental Math Sprint', min: 1, tag: 'Processing speed', desc: 'Sixty seconds of arithmetic. Difficulty rises as you improve.', run: gMath, unit: ' solved' },
+  { id: 'recall', cat: 'Memory', track: true, name: 'Memory Palace', min: 3, tag: 'Method of loci', desc: 'Memorise 10 words by placing them along a familiar route, then recall them.', run: gRecall, unit: '%' },
+  { id: 'feynman', cat: 'Learning', track: false, name: 'Feynman Journal', min: 3, tag: 'Deep understanding', desc: 'Explain something you learned in plain words, as if teaching a kid.', run: gFeynman, unit: ' words' },
+  { id: 'cards', cat: 'Learning', track: false, name: 'Flashcards', min: 3, tag: 'Spaced repetition', desc: 'Review the cards due today.', run: null, unit: ' cards' },
+  { id: 'habits', cat: 'Habits', track: false, name: 'Brain habits', min: 1, tag: 'Sleep · Exercise · Reading', desc: 'Log the daily basics that matter more than any game.', run: gHabits, unit: '/6' },
 ];
 const DAILY = ['breathe', 'lesson', 'manip', 'nback', 'stroop', 'math'];
 const CATS = ['Influence', 'Memory', 'Focus', 'Speed', 'Learning', 'Habits', 'Calm'];
 const actById = id => ACTS.find(a => a.id === id);
 const doneToday = id => records.some(r => r.activity === id && r.date === today());
-const lastScore = id => { const r = [...records].reverse().find(r => r.activity === id); return r ? r.score : null; };
+const streak = () => Logic.streakOf(records, today());
 
 /* ---------- views ---------- */
-let cleanup = () => { };
+let cleanup = () => { }, currentTab = 'today', inGame = false;
 function show(tab) {
-  cleanup(); cleanup = () => { };
-  document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  cleanup(); cleanup = () => { }; inGame = false; currentTab = tab;
+  document.querySelectorAll('#nav button').forEach(b => { const on = b.dataset.tab === tab; b.classList.toggle('on', on); on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
   const app = $('#app'); app.innerHTML = '';
   ({ today: vToday, practice: vPractice, report: vReport, cards: vCards, library: vLibrary })[tab](app);
+  window.scrollTo(0, 0);
 }
 $('#nav').onclick = e => { if (e.target.dataset.tab) show(e.target.dataset.tab); };
-
-function streak() {
-  const counts = {}; records.forEach(r => { counts[r.date] = (counts[r.date] || new Set()).add(r.activity); });
-  let s = 0, d = today(); if ((counts[d]?.size || 0) < 3) d = addDays(d, -1);
-  while ((counts[d]?.size || 0) >= 3) { s++; d = addDays(d, -1); }
-  return s;
-}
 
 function vToday(app) {
   const list = DAILY.map(actById), left = list.filter(a => !doneToday(a.id)), mins = left.reduce((x, a) => x + a.min, 0);
   const date = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
-  const due = cards.filter(c => c.due <= today()).length;
+  const due = cards.filter(c => c.due <= today()).length, doneN = list.length - left.length;
   app.append(h(`<div>
     <p class="eyebrow">${date}</p>
     <h1 class="hero">${left.length ? 'Today\'s session.' : 'All done today.'}</h1>
-    <p class="lede">${left.length ? `${list.length} exercises, about ${mins} minutes. Same set every day, nothing to choose. Just press start.` : 'Nice work. Come back tomorrow, or open Practice for extra reps.'}</p>
-    <div class="row-btns" style="justify-content:flex-start;margin:0 0 28px"><button class="btn primary" id="go" style="padding:14px 30px;font-size:16px">${left.length ? (left.length < list.length ? 'Continue session' : 'Start session') : 'Run it again'}</button></div>
+    <p class="lede">${left.length ? `${list.length} exercises, about ${mins} minutes. The same set every day, nothing to choose. Any 3 keep your streak.` : 'Come back tomorrow, or open Practice for extra reps.'}</p>
+    <div class="row-btns" style="justify-content:flex-start;margin:0 0 28px"><button class="btn primary big-btn" id="go">${left.length ? (doneN ? 'Continue session' : 'Start session') : 'Run it again'}</button></div>
     <div class="figs">
       <div><b>${streak()}</b><span>day streak</span></div>
-      <div><b>${list.length - left.length}/${list.length}</b><span>done today</span></div>
-      <div class="seg">${list.map(a => `<i class="${doneToday(a.id) ? 'on' : ''}"></i>`).join('')}</div>
+      <div><b>${doneN}/${list.length}</b><span>done today</span></div>
+      <div class="seg" aria-hidden="true">${list.map(a => `<i class="${doneToday(a.id) ? 'on' : ''}"></i>`).join('')}</div>
     </div>
     <ol class="sheet">${list.map((a, i) => `<li class="row ${doneToday(a.id) ? 'done' : ''}"><span class="no">${String(i + 1).padStart(2, '0')}</span><div class="what"><h3>${a.name}</h3><span class="meta">${a.tag} · ${a.min} min</span></div><span class="meta">${doneToday(a.id) ? 'done' : ''}</span></li>`).join('')}</ol>
-    ${due ? `<p class="meta">${due} flashcard${due > 1 ? 's' : ''} due in <a href="#" id="cl" style="color:var(--acc)">Flashcards</a></p>` : ''}
+    ${due ? `<p class="meta" style="margin-top:18px">${due} flashcard${due > 1 ? 's' : ''} due. <a href="#" id="cl">Review them</a></p>` : ''}
   </div>`));
-  $('#go').onclick = () => { const ids = left.length ? left.map(a => a.id) : DAILY; launch(actById(ids[0]), { list: ids, i: 0, end: 'report' }); };
+  $('#go').onclick = () => { const ids = left.length ? left.map(a => a.id) : DAILY; launch(actById(ids[0]), { list: ids, i: 0 }); };
   const cl = $('#cl'); if (cl) cl.onclick = e => { e.preventDefault(); show('cards'); };
 }
 
-let pickedCats = load('braingym.cats.v1', ['Influence']);
+let pickedCats = load(K.cats, ['Influence']);
 function vPractice(app) {
   const games = () => ACTS.filter(a => a.run && pickedCats.includes(a.cat)), mins = () => games().reduce((x, a) => x + a.min, 0);
-  app.append(h(`<div><p class="eyebrow">Extra reps</p><h1>Practice</h1><p class="sub">Pick one or more categories. We line up every exercise in them and run them back to back.</p>
-    <div class="row-btns" id="cats" style="justify-content:flex-start"></div><div id="plan"></div></div>`));
+  app.append(h(`<div><p class="eyebrow">Extra reps</p><h1>Practice</h1><p class="sub">Pick one or more categories. Every exercise in them runs back to back.</p>
+    <div class="row-btns" id="cats" role="group" aria-label="Categories" style="justify-content:flex-start"></div><div id="plan"></div></div>`));
   const draw = () => {
-    $('#cats').innerHTML = ''; CATS.forEach(c => { const n = ACTS.filter(a => a.cat === c).length; const b = h(`<button class="btn ${pickedCats.includes(c) ? 'primary' : ''}">${c} <span class="meta" style="color:inherit;opacity:.7">${n}</span></button>`); b.onclick = () => { pickedCats = pickedCats.includes(c) ? pickedCats.filter(x => x !== c) : [...pickedCats, c]; save('braingym.cats.v1', pickedCats); draw(); }; $('#cats').append(b); });
+    $('#cats').innerHTML = ''; CATS.forEach(c => { const n = ACTS.filter(a => a.cat === c && a.run).length, on = pickedCats.includes(c); const b = h(`<button class="btn ${on ? 'primary' : ''}" aria-pressed="${on}">${c} <span class="meta" style="color:inherit;opacity:.7">${n}</span></button>`); b.onclick = () => { pickedCats = on ? pickedCats.filter(x => x !== c) : [...pickedCats, c]; save(K.cats, pickedCats); draw(); }; $('#cats').append(b); });
     const g = games(); $('#plan').innerHTML = g.length ? `<ol class="sheet">${g.map((a, i) => `<li class="row"><span class="no">${String(i + 1).padStart(2, '0')}</span><div class="what"><h3>${a.name}</h3><p>${a.desc}</p><span class="meta">${a.cat} · ${a.min} min</span></div></li>`).join('')}</ol>
-      <div class="row-btns" style="justify-content:flex-start;margin-top:22px"><button class="btn primary" id="st" style="padding:14px 30px;font-size:16px">Start ${g.length} exercise${g.length > 1 ? 's' : ''} · ~${mins()} min</button></div>` : '<p class="sub">Select at least one category.</p>';
-    if (g.length) $('#st').onclick = () => { const ids = g.map(a => a.id); launch(g[0], { list: ids, i: 0, end: 'report' }); };
-    if (pickedCats.includes('Learning')) $('#plan').insertAdjacentHTML('beforeend', '<p class="meta" style="margin-top:12px">Flashcards live in their own tab (<a href="#" id="fc" style="color:var(--acc)">open</a>).</p>'), $('#fc').onclick = e => { e.preventDefault(); show('cards'); };
+      <div class="row-btns" style="justify-content:flex-start;margin-top:22px"><button class="btn primary big-btn" id="st">Start ${g.length} exercise${g.length > 1 ? 's' : ''} · about ${mins()} min</button></div>` : '<p class="sub">Select at least one category.</p>';
+    if (g.length) $('#st').onclick = () => { const ids = g.map(a => a.id); launch(g[0], { list: ids, i: 0, practice: true }); };
+    if (pickedCats.includes('Learning')) { $('#plan').insertAdjacentHTML('beforeend', '<p class="meta" style="margin-top:12px">Flashcards have their own tab. <a href="#" id="fc">Open</a></p>'); $('#fc').onclick = e => { e.preventDefault(); show('cards'); }; }
   }; draw();
 }
 
 function launch(a, q) {
-  const app = $('#app'); app.innerHTML = ''; cleanup();
-  const stage = h(`<div class="stage"><div class="top"><span>${a.name}</span><span class="meta">${q ? `${q.i + 1} of ${q.list.length}` : ''}</span><button class="btn ghost" id="quit">Quit</button></div><div id="body"></div></div>`);
-  app.append(stage);
+  const app = $('#app'); cleanup(); app.innerHTML = ''; inGame = true;
+  app.append(h(`<div class="stage"><div class="top"><span>${a.name}</span><span class="meta">${q ? `${q.i + 1} of ${q.list.length}` : ''}</span><button class="btn ghost" id="quit">Quit</button></div><div id="body"></div></div>`));
   let alive = true; cleanup = () => { alive = false; };
-  $('#quit').onclick = () => show(q ? 'today' : 'practice');
+  $('#quit').onclick = () => { if (confirm('Quit? Anything you already finished is saved.')) show(q && !q.practice ? 'today' : 'practice'); };
   const finish = (score, detail, extra = '') => {
-    alive = false; addRecord(a.id, score, detail);
+    if (!alive) return; cleanup(); alive = false; addRecord(a.id, score, detail);
     const nxt = q && q.list[q.i + 1] && actById(q.list[q.i + 1]);
-    $('#body').innerHTML = `<div class="result">${score}${a.unit}</div><p class="msg">${extra}</p><div class="row-btns">${nxt ? `<button class="btn primary" id="next">Next: ${nxt.name} →</button>` : `<button class="btn primary" id="rep">${q ? 'See report' : 'Back'}</button>`}<button class="btn" id="again">Retry</button></div>`;
+    $('#body').innerHTML = `<div class="result">${score}${a.unit}</div><p class="msg">${esc(extra)}</p><div class="row-btns">${nxt ? `<button class="btn primary" id="next">Next: ${nxt.name} →</button>` : `<button class="btn primary" id="rep">${q ? 'See report' : 'Back'}</button>`}<button class="btn" id="again">Retry</button></div>`;
+    (nxt ? $('#next') : $('#rep')).focus();
     if (nxt) $('#next').onclick = () => launch(nxt, { ...q, i: q.i + 1 }); else $('#rep').onclick = () => show(q ? 'report' : 'today');
     $('#again').onclick = () => launch(a, q);
   };
   a.run($('#body'), finish, () => alive);
 }
 
-/* ---------- games ---------- */
-function gBreathe(root, finish, alive) {
-  root.innerHTML = `<p class="msg" id="ph">Get comfortable. Starting…</p><div class="circle" id="c"></div><div class="big" id="t">60</div>`;
-  const phases = ['Breathe in', 'Hold', 'Breathe out', 'Hold']; (async () => {
-    const c = $('#c'); await sleep(1200);
-    for (let s = 0; s < 60 && alive(); s++) {
-      const k = s % 16, ph = Math.floor(k / 4);
-      if (k % 4 === 0) { $('#ph').textContent = phases[ph]; c.style.transform = ph === 0 ? 'scale(1.8)' : ph === 2 ? 'scale(1)' : c.style.transform; c.style.opacity = ph <= 1 ? 1 : .6; }
-      $('#t').textContent = 60 - s; await sleep(1000);
-    }
-    if (alive()) finish(60, { pattern: '4-4-4-4' }, 'Nice. Calm brain, ready to work.');
-  })();
-}
-
-function gNback(root, finish, alive) {
-  const n = level('nback', 2), total = 20 + n, L = 'CHKLQRST'.split('');
-  root.innerHTML = `<p class="msg">Level <b>${n}-back</b>. Press <b>A</b> if the position matches ${n} step${n > 1 ? 's' : ''} ago, <b>L</b> if the letter matches. (${total} rounds)</p>
-  <div class="tiles" id="g"></div><div class="row-btns"><button class="btn" id="bp">A · Position match</button><button class="btn" id="bl">L · Letter match</button></div><p class="msg" id="st">Get ready…</p>`;
-  const cells = []; for (let i = 0; i < 9; i++) { const t = h('<div class="tile"></div>'); $('#g').append(t); cells.push(t); }
-  let pp = false, pl = false; const press = k => { if (k === 'p') pp = true; else pl = true; (k === 'p' ? $('#bp') : $('#bl')).style.outline = '2px solid var(--acc)'; };
-  $('#bp').onclick = () => press('p'); $('#bl').onclick = () => press('l');
-  const key = e => { const k = e.key.toLowerCase(); if (k === 'a') press('p'); if (k === 'l') press('l'); };
-  document.addEventListener('keydown', key);
-  const prev = cleanup; cleanup = () => { document.removeEventListener('keydown', key); prev(); };
-  (async () => {
-    await sleep(1500); const seq = []; let correct = 0, dec = 0, hits = 0, misses = 0, fa = 0;
-    for (let i = 0; i < total && alive(); i++) {
-      let pos = rnd(9), let_ = pick(L);
-      if (i >= n) { if (Math.random() < .3) pos = seq[i - n].pos; if (Math.random() < .3) let_ = seq[i - n].let; }
-      seq.push({ pos, let: let_ }); pp = pl = false; $('#bp').style.outline = $('#bl').style.outline = '';
-      cells[pos].classList.add('lit'); cells[pos].textContent = let_; $('#st').textContent = `Round ${i + 1}/${total}`;
-      await sleep(600); cells[pos].classList.remove('lit'); cells[pos].textContent = ''; await sleep(1900);
-      if (i >= n) {
-        const mp = seq[i].pos === seq[i - n].pos, ml = seq[i].let === seq[i - n].let;
-        [[mp, pp], [ml, pl]].forEach(([m, p]) => { dec++; if (m === p) correct++; if (m && p) hits++; if (m && !p) misses++; if (!m && p) fa++; });
-      }
-    }
-    if (!alive()) return;
-    const acc = Math.round(correct / dec * 100); const next = acc >= 85 ? n + 1 : acc < 65 ? Math.max(1, n - 1) : n; setLevel('nback', next);
-    finish(acc, { n, hits, misses, falseAlarms: fa }, `${n}-back · hits ${hits}, misses ${misses}, false alarms ${fa}. ${next > n ? 'Level up next time!' : next < n ? 'Easing down a level.' : 'Staying at this level.'}`);
-  })();
-}
-
-function gStroop(root, finish, alive) {
-  const C = [['RED', '#f87171'], ['GREEN', '#4ade80'], ['BLUE', '#60a5fa'], ['YELLOW', '#fbbf24']], total = 20;
-  root.innerHTML = `<p class="msg">Tap the colour of the INK (or press 1-4). ${total} rounds.</p><div class="big" id="w"></div><div class="row-btns" id="o"></div><p class="msg" id="st"></p>`;
-  let i = 0, ok = 0, rts = [], t0, cur, lock = true;
-  C.forEach((c, k) => { const b = h(`<button class="btn" style="border-bottom:4px solid ${c[1]}">${k + 1} · ${c[0]}</button>`); b.onclick = () => ans(k); $('#o').append(b); });
-  const key = e => { if (/^[1-4]$/.test(e.key)) ans(+e.key - 1); }; document.addEventListener('keydown', key);
-  const prev = cleanup; cleanup = () => { document.removeEventListener('keydown', key); prev(); };
-  function next() {
-    if (!alive()) return; if (i >= total) { const acc = Math.round(ok / total * 100), avg = Math.round(rts.reduce((a, b) => a + b, 0) / rts.length); return finish(acc, { avgRtMs: avg }, `Average reaction ${avg} ms`); }
-    const w = rnd(4), ink = Math.random() < .5 ? w : (w + 1 + rnd(3)) % 4; cur = ink;
-    $('#w').textContent = C[w][0]; $('#w').style.color = C[ink][1]; $('#st').textContent = `${i + 1}/${total}`; t0 = performance.now(); lock = false;
-  }
-  function ans(k) { if (lock) return; lock = true; rts.push(performance.now() - t0); if (k === cur) ok++; i++; $('#st').textContent = k === cur ? '✓' : '✗'; setTimeout(next, 250); }
-  setTimeout(next, 800);
-}
-
-function gSeq(root, finish, alive) {
-  root.innerHTML = `<p class="msg" id="m">Watch closely…</p><div class="tiles" id="g"></div>`;
-  const cells = []; for (let i = 0; i < 9; i++) { const t = h('<button class="tile"></button>'); t.onclick = () => tap(i); $('#g').append(t); cells.push(t); }
-  let seq = [], idx = 0, accepting = false;
-  const flash = async (i, cls = 'lit', ms = 400) => { cells[i].classList.add(cls); await sleep(ms); cells[i].classList.remove(cls); await sleep(150); };
-  async function round() {
-    seq.push(rnd(9)); idx = 0; accepting = false; $('#m').textContent = `Length ${seq.length} — watch…`; await sleep(700);
-    for (const s of seq) { if (!alive()) return; await flash(s); }
-    accepting = true; $('#m').textContent = 'Your turn!';
-  }
-  async function tap(i) {
-    if (!accepting || !alive()) return;
-    if (i === seq[idx]) { flash(i, 'ok', 200); idx++; if (idx === seq.length) { accepting = false; await sleep(500); round(); } }
-    else { accepting = false; await flash(i, 'no', 500); finish(seq.length - 1, {}, `You remembered ${seq.length - 1} in a row.`); }
-  }
-  round();
-}
-
-function gDigits(root, finish, alive) {
-  const back = new Date().getDate() % 2 === 1; let len = 3, fails = 0, best = 0;
-  root.innerHTML = `<p class="msg">${back ? 'BACKWARD day: type the digits in reverse order.' : 'Type the digits in the same order.'}</p><div class="big" id="d">&nbsp;</div>
-  <div class="field"><input type="text" id="in" inputmode="numeric" autocomplete="off" disabled placeholder="Type here and press Enter"></div><p class="msg" id="m"></p>`;
-  const inp = $('#in'); let expected = '', ready = false;
-  async function round() {
-    ready = false; inp.value = ''; inp.disabled = true; $('#m').textContent = `${len} digits`; await sleep(900);
-    const ds = Array.from({ length: len }, () => rnd(10)); expected = (back ? [...ds].reverse() : ds).join('');
-    for (const d of ds) { if (!alive()) return; $('#d').textContent = d; await sleep(750); $('#d').innerHTML = '&nbsp;'; await sleep(250); }
-    inp.disabled = false; inp.focus(); ready = true; $('#m').textContent = 'Now recall →';
-  }
-  inp.onkeydown = e => {
-    if (e.key !== 'Enter' || !ready) return; ready = false;
-    if (inp.value.trim() === expected) { best = len; len++; fails = 0; $('#m').textContent = '✓ Correct'; } else { fails++; $('#m').textContent = `✗ It was ${expected}`; }
-    if (fails >= 2) return setTimeout(() => finish(best, { mode: back ? 'backward' : 'forward' }, `Longest span: ${best}`), 1200);
-    setTimeout(round, 1200);
-  };
-  round();
-}
-
-function gMath(root, finish, alive) {
-  const lv = level('math', 1); let solved = 0, tried = 0, left = 60, a = 0;
-  const gen = () => {
-    const r = (lo, hi) => lo + rnd(hi - lo + 1); let x, y, op;
-    switch (lv) {
-      case 1: x = r(2, 19); y = r(2, 19); op = Math.random() < .5 ? '+' : '−'; if (op === '−' && y > x) [x, y] = [y, x]; break;
-      case 2: x = r(10, 99); y = r(10, 99); op = Math.random() < .5 ? '+' : '−'; if (op === '−' && y > x) [x, y] = [y, x]; break;
-      case 3: x = r(3, 12); y = r(3, 12); op = '×'; break;
-      case 4: x = r(11, 99); y = r(3, 9); op = '×'; break;
-      default: x = r(11, 25); y = r(11, 25); op = '×';
-    }
-    a = op === '+' ? x + y : op === '−' ? x - y : x * y; return `${x} ${op} ${y}`;
-  };
-  root.innerHTML = `<p class="msg">Level ${lv}. Type the answer, press Enter. <b id="tm">60</b>s left</p><div class="big" id="q"></div><div class="field"><input type="number" id="in" autofocus></div><p class="msg" id="m">Solved: 0</p>`;
-  const inp = $('#in'); $('#q').textContent = gen(); inp.focus();
-  inp.onkeydown = e => { if (e.key !== 'Enter' || inp.value === '') return; tried++; if (+inp.value === a) solved++; inp.value = ''; $('#q').textContent = gen(); $('#m').textContent = `Solved: ${solved}`; };
-  const iv = setInterval(() => {
-    if (!alive()) return clearInterval(iv); left--; $('#tm').textContent = left;
-    if (left <= 0) { clearInterval(iv); const nl = solved >= 14 ? Math.min(5, lv + 1) : solved < 6 ? Math.max(1, lv - 1) : lv; setLevel('math', nl); finish(solved, { level: lv, tried }, `${solved}/${tried} correct at level ${lv}. ${nl > lv ? 'Level up!' : nl < lv ? 'Easing down.' : ''}`); }
-  }, 1000);
-}
-
-const WORDS = 'anchor piano rocket candle forest mirror violin lantern castle river dragon pencil bridge garden ticket window planet hammer pillow camera island saddle velvet marble thunder orchid compass jungle whistle blanket cactus engine feather magnet puzzle ribbon shadow turtle volcano wallet zipper bottle cookie diamond eagle fountain guitar helmet jacket kettle ladder monkey needle ocean parrot quilt rabbit spoon tunnel umbrella'.split(' ');
-function gRecall(root, finish, alive) {
-  const words = shuffle(WORDS).slice(0, 10); let t = 45;
-  root.innerHTML = `<p class="msg">Picture walking through your home (door → hall → kitchen → …). <b>Place one word in each spot</b>, making each image vivid, weird or funny. <b id="tm">45</b>s</p>
-  <div class="chips" style="justify-content:center;font-size:20px">${words.map((w, i) => `<span class="chip" style="font-size:18px;color:var(--text)">${i + 1}. ${w}</span>`).join('')}</div>
-  <div class="row-btns"><button class="btn primary" id="go">I'm ready → recall</button></div>`;
-  const go = () => {
-    clearInterval(iv); if (!alive()) return;
-    root.innerHTML = `<p class="msg">Walk your route again. Type every word you remember (any order, separated by spaces or commas).</p><div class="field"><textarea id="ans" autofocus></textarea></div><div class="row-btns"><button class="btn primary" id="sub">Check</button></div>`;
-    $('#sub').onclick = () => {
-      const got = new Set($('#ans').value.toLowerCase().split(/[^a-z]+/)); const hit = words.filter(w => got.has(w)), miss = words.filter(w => !got.has(w));
-      finish(Math.round(hit.length / 10 * 100), { hit: hit.length, missed: miss }, `${hit.length}/10 recalled.${miss.length ? ' Missed: ' + miss.join(', ') : ' Perfect! '}`);
-    };
-  };
-  $('#go').onclick = go;
-  const iv = setInterval(() => { if (!alive()) return clearInterval(iv); t--; $('#tm').textContent = t; if (t <= 0) go(); }, 1000);
-}
-
-const PROMPTS = ['What is one new thing you learned today?', 'Explain a concept from your work as if to a 10-year-old.', 'Why does something you use every day actually work?', 'What mistake did you make recently and what is the real lesson?', 'Teach me one idea from the last thing you read or watched.'];
-function gFeynman(root, finish) {
-  root.innerHTML = `<p class="msg">${esc(pick(PROMPTS))}<br>Use simple words. No jargon. Where you get stuck = what to study next.</p>
-  <div class="field"><label>Topic</label><input type="text" id="tp" placeholder="e.g. How compound interest works"></div>
-  <div class="field"><label>Your plain-language explanation</label><textarea id="ex"></textarea></div>
-  <div class="field"><label>Where did you get stuck? (optional)</label><input type="text" id="gap"></div>
-  <div class="row-btns"><button class="btn primary" id="sv">Save entry</button></div>`;
-  $('#sv').onclick = () => { const ex = $('#ex').value.trim(); if (ex.split(/\s+/).length < 15) return alert('Write at least ~15 words — explaining is the exercise.'); finish(ex.split(/\s+/).length, { topic: $('#tp').value, text: ex, gap: $('#gap').value }, 'Saved to your journal (see data/records.csv).'); };
-}
-
-function gHabits(root, finish) {
-  const items = ['Slept 7+ hours', '20+ min exercise / brisk walk', 'Read 20+ min', 'One 45-min deep-work block, phone away', 'Drank enough water', 'Learned or tried something new'];
-  root.innerHTML = `<p class="msg">Tick what you did (or will do) today. Sleep and exercise have the strongest evidence for brain health.</p>${items.map((t, i) => `<label class="check"><input type="checkbox" data-i="${i}"> ${t}</label>`).join('')}<div class="row-btns"><button class="btn primary" id="sv">Save</button></div>`;
-  $('#sv').onclick = () => { const on = [...root.querySelectorAll('input:checked')].map(c => items[c.dataset.i]); finish(on.length, { done: on }, on.length >= 5 ? 'Brain-friendly day! ' : 'Every tick counts.'); };
-}
-
-
-/* ---------- influence & manipulation ---------- */
-const dayNo = () => Math.floor(new Date(today() + 'T12:00:00') / 864e5);
-const techOfDay = () => TECH[dayNo() % TECH.length];
-const techById = id => TECH.find(t => t.id === id);
-function manipStats() {
-  const st = {}; records.filter(r => r.activity === 'manip').forEach(r => { let d = {}; try { d = JSON.parse(r.detail); } catch { } (d.results || []).forEach(x => { const e = st[x.id] ||= { n: 0, ok: 0, last: null, t: x.tid }; e.n++; e.ok += x.correct ? 1 : 0; e.last = x.correct; }); });
-  return st;
-}
-function gLesson(root, finish) {
-  const t = techOfDay();
-  root.innerHTML = `<div style="text-align:left"><p class="eyebrow">Technique ${TECH.indexOf(t) + 1} of ${TECH.length} · ${esc(t.src)}</p><h1 style="font-size:36px">${esc(t.name)}</h1>
-  <p class="serif">${esc(t.def)}</p>
-  <h2 style="font-size:18px">How to spot it</h2><ul>${t.signs.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
-  <h2 style="font-size:18px">How to counter it</h2><p>${esc(t.counter)}</p>
-  <div class="field"><label>Where have you seen or felt this? (ads, work, family, media; 1-2 sentences)</label><textarea id="ex" style="min-height:90px"></textarea></div>
-  <div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="sv">Save and continue</button></div></div>`;
-  $('#sv').onclick = () => { const x = $('#ex').value.trim(), n = x ? x.split(/\s+/).length : 0; if (n < 6) return alert('Write at least a short sentence. Linking it to real life is what makes it stick.'); finish(n, { tech: t.id, text: x }, `Saved. Today you will be tested on ${t.name.split(' (')[0]} and others.`); };
-}
-
-function gManip(root, finish, alive) {
-  const st = manipStats(), tod = techOfDay();
-  const weight = sc => { const e = st[sc.id]; return (!e ? 3 : e.last === false ? 4 : 1) + Math.random() * 2; };
-  const first = pick(SCEN.filter(x => x.t === tod.id)), rest = SCEN.filter(x => x.id !== first.id).sort((a, b) => weight(b) - weight(a));
-  const picked = [first]; for (const x of rest) { if (picked.length >= 3) break; if (!picked.some(p => p.t === x.t)) picked.push(x); }
-  let i = 0; const results = [];
-  const options = sc => { const t = techById(sc.t), same = shuffle(TECH.filter(x => x.g === t.g && x.id !== t.id)).slice(0, 2), other = shuffle(TECH.filter(x => x.g !== t.g)).slice(0, 1); return shuffle([t, ...same, ...other]); };
-  const round = () => {
-    if (!alive()) return; if (i >= picked.length) return finish(Math.round(avg(results.map(r => r.pts))), { results }, `${results.filter(r => r.correct).length} of ${results.length} techniques named correctly.`);
-    const sc = picked[i], opts = options(sc); let chosen = null;
-    root.innerHTML = `<div style="text-align:left"><p class="eyebrow">Situation ${i + 1} of ${picked.length}</p><p class="serif" style="font-size:22px;margin-bottom:22px">${esc(sc.text)}</p>
-    <p class="eyebrow">1 · Which technique is this?</p><div id="op" style="display:flex;flex-direction:column;gap:8px;margin-bottom:22px"></div>
-    <div class="field"><label>2 · Your reasoning: which signals in the situation tell you so?</label><textarea id="rs" placeholder="e.g. They did X first, which creates... then asked for Y..."></textarea></div>
-    <div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="sub">Submit</button></div></div>`;
-    opts.forEach(o => { const b = h(`<button class="btn" style="text-align:left">${esc(o.name)}</button>`); b.onclick = () => { chosen = o; root.querySelectorAll('#op .btn').forEach(x => x.classList.remove('primary')); b.classList.add('primary'); }; $('#op').append(b); });
-    $('#sub').onclick = () => {
-      const txt = $('#rs').value.trim(); if (!chosen) return alert('Pick a technique first.'); if (txt.split(/\s+/).length < 8) return alert('Explain your reasoning in at least a sentence or two (8+ words).');
-      const low = txt.toLowerCase(), hits = sc.keys.filter(k => low.includes(k)), correct = chosen.id === sc.t, pts = (correct ? 60 : 0) + Math.round(Math.min(hits.length, 3) / 3 * 40);
-      results.push({ id: sc.id, tid: sc.t, correct, pts }); const t = techById(sc.t);
-      root.innerHTML = `<div style="text-align:left"><p class="eyebrow" style="color:${correct ? 'var(--good)' : 'var(--acc)'}">${correct ? 'Correct' : 'Not quite'} · ${pts}/100</p>
-      <h1 style="font-size:32px">${esc(t.name)}</h1>
-      ${correct ? '' : `<p class="meta">You chose: ${esc(chosen.name)}</p>`}
-      <h2 style="font-size:18px">Model reasoning</h2><p>${esc(sc.why)}</p>
-      <p class="meta">Your reasoning touched ${Math.min(hits.length, 3)} of 3 key ideas${hits.length ? ': ' + esc(hits.slice(0, 4).join(', ')) : ''}. Compare it with the model answer above.</p>
-      <h2 style="font-size:18px">Tell-tale signs</h2><ul>${t.signs.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
-      <h2 style="font-size:18px">Your counter-move</h2><p>${esc(t.counter)}</p>
-      <div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="nx">${i + 1 < picked.length ? 'Next situation' : 'Finish'}</button></div></div>`;
-      $('#nx').onclick = () => { i++; round(); };
-    };
-  };
-  round();
-}
-
-/* ---------- flashcards (SM-2 lite) ---------- */
+/* ---------- flashcards ---------- */
+const CARD_H = ['id', 'front', 'back', 'due', 'interval', 'ease', 'reps'];
+function download(name, text, type = 'text/csv') { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
 function vCards(app) {
   const due = () => cards.filter(c => c.due <= today());
-  app.append(h(`<div><h1>Flashcards</h1><p class="sub">Spaced repetition: recalling a card right before you'd forget it is the most efficient way to build long-term memory.</p>
-  <div class="stats"><div class="stat"><b>${cards.length}</b><span>total cards</span></div><div class="stat"><b>${due().length}</b><span>due today</span></div></div>
+  app.append(h(`<div><p class="eyebrow">Spaced repetition</p><h1>Flashcards</h1><p class="sub">Recalling a card just before you would forget it is the most efficient way to build long-term memory. Add things you actually want to keep.</p>
+  <div class="figs"><div><b>${cards.length}</b><span>cards</span></div><div><b>${due().length}</b><span>due today</span></div></div>
   <div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="rev" ${due().length ? '' : 'disabled'}>Review ${due().length} due</button></div>
-  <div class="lib" id="rv" hidden></div>
-  <h2>Add a card</h2><div class="lib"><div class="field"><label>Front (question / word / concept)</label><input type="text" id="f"></div><div class="field"><label>Back (answer)</label><input type="text" id="b"></div><button class="btn primary" id="add">Add card</button></div>
-  <h2>All cards</h2><table><tr><th>Front</th><th>Back</th><th>Next due</th><th></th></tr>${cards.map(c => `<tr><td>${esc(c.front)}</td><td>${esc(c.back)}</td><td>${c.due}</td><td><button class="btn ghost" data-del="${c.id}">✕</button></td></tr>`).join('') || '<tr><td colspan="4" class="sub">No cards yet — add things you want to remember: vocabulary, formulas, facts from books.</td></tr>'}</table></div>`));
-  $('#add').onclick = () => { const f = $('#f').value.trim(), b = $('#b').value.trim(); if (!f || !b) return; cards.push({ id: Date.now().toString(36), front: f, back: b, due: today(), interval: 0, ease: 2.5, reps: 0 }); saveCards(); show('cards'); };
-  app.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { cards = cards.filter(c => c.id !== b.dataset.del); saveCards(); show('cards'); });
+  <div id="rv" hidden></div>
+  <h2>Add a card</h2><form id="addf"><div class="field"><label for="f">Front (question, word, concept)</label><input type="text" id="f" autocomplete="off"></div><div class="field"><label for="b">Back (answer)</label><input type="text" id="b" autocomplete="off"></div><button class="btn primary" type="submit">Add card</button></form>
+  <h2>All cards</h2><div class="tscroll"><table><tr><th>Front</th><th>Back</th><th>Next due</th><th></th></tr>${cards.map(c => `<tr><td>${esc(c.front)}</td><td>${esc(c.back)}</td><td>${esc(c.due)}</td><td><button class="btn ghost" data-del="${esc(c.id)}" aria-label="Delete card ${esc(c.front)}">Delete</button></td></tr>`).join('') || '<tr><td colspan="4" class="sub">No cards yet.</td></tr>'}</table></div>
+  <div class="row-btns" style="justify-content:flex-start"><button class="btn" id="cx" ${cards.length ? '' : 'disabled'}>Export cards CSV</button><button class="btn ghost" id="ci">Import cards CSV</button><input type="file" id="cf" accept=".csv" hidden></div></div>`));
+  $('#addf').onsubmit = e => { e.preventDefault(); const f = $('#f').value.trim(), b = $('#b').value.trim(); if (!f || !b) return; cards.push({ id: Date.now().toString(36) + rnd(999), front: f, back: b, due: today(), interval: 0, ease: 2.5, reps: 0 }); saveCards(); show('cards'); $('#f').focus(); };
+  app.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { if (confirm('Delete this card?')) { cards = cards.filter(c => c.id !== b.dataset.del); saveCards(); show('cards'); } });
+  $('#cx').onclick = () => download(`brain-gym-cards-${today()}.csv`, CARD_H.join(',') + '\n' + cards.map(c => Logic.csvLine(CARD_H, c)).join(''));
+  $('#ci').onclick = () => $('#cf').click();
+  $('#cf').onchange = async e => { const f = e.target.files[0]; if (!f) return; const have = new Set(cards.map(c => c.id)); let n = 0; Logic.parseCsv(await f.text()).forEach(c => { if (c.id && c.front && c.back && !have.has(c.id)) { cards.push({ id: c.id, front: c.front, back: c.back, due: /^\d{4}-\d\d-\d\d$/.test(c.due) ? c.due : today(), interval: +c.interval || 0, ease: +c.ease || 2.5, reps: +c.reps || 0 }); n++; } }); saveCards(); e.target.value = ''; show('cards'); };
   $('#rev').onclick = () => {
-    const queue = shuffle(due()); let n = 0; const rv = $('#rv'); rv.hidden = false;
+    const queue = shuffle(due()); let n = 0; const rv = $('#rv'); rv.hidden = false; rv.className = 'revbox';
     const step = () => {
-      if (!queue.length) { if (n) addRecord('cards', n, {}); rv.innerHTML = `<div class="result">${n} reviewed</div><button class="btn primary" id="ok">Done</button>`; $('#ok').onclick = () => show('cards'); return; }
-      const c = queue[0]; rv.innerHTML = `<p class="msg">${queue.length} left — try to recall BEFORE flipping.</p><div class="big" style="font-size:30px">${esc(c.front)}</div><div class="row-btns"><button class="btn" id="fl">Show answer</button></div>`;
+      if (!queue.length) { if (n) addRecord('cards', n, {}); rv.innerHTML = `<div class="result">${n} reviewed</div><button class="btn primary" id="ok">Done</button>`; $('#ok').focus(); $('#ok').onclick = () => show('cards'); return; }
+      const c = queue[0]; rv.innerHTML = `<p class="msg">${queue.length} left. Try to recall before you flip it.</p><div class="big" style="font-size:30px">${esc(c.front)}</div><div class="row-btns"><button class="btn" id="fl">Show answer</button></div>`; $('#fl').focus();
       $('#fl').onclick = () => {
         rv.innerHTML = `<p class="msg">${esc(c.front)}</p><div class="big" style="font-size:30px;color:var(--good)">${esc(c.back)}</div><div class="row-btns"><button class="btn" data-q="0">Again</button><button class="btn" data-q="1">Good</button><button class="btn primary" data-q="2">Easy</button></div>`;
+        rv.querySelector('[data-q="1"]').focus();
         rv.querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
-          const q = +b.dataset.q; queue.shift();
-          if (q === 0) { c.reps = 0; c.interval = 0; c.ease = Math.max(1.3, c.ease - .2); c.due = today(); queue.push(c); }
-          else { c.reps++; c.interval = c.reps === 1 ? (q === 2 ? 3 : 1) : c.reps === 2 ? (q === 2 ? 8 : 4) : Math.round(c.interval * c.ease * (q === 2 ? 1.3 : 1)); if (q === 2) c.ease += .1; c.due = addDays(today(), c.interval); n++; }
+          const q = +b.dataset.q; queue.shift(); const r = Logic.sm2(c, q, today()); Object.assign(c, r.card);
+          if (r.requeue) queue.push(c); else n++;
           saveCards(); step();
         });
       };
@@ -367,82 +167,88 @@ function vCards(app) {
   };
 }
 
-/* ---------- progress ---------- */
+/* ---------- report ---------- */
 function spark(v) {
   if (v.length < 2) return '';
   const lo = Math.min(...v), hi = Math.max(...v), w = 110, ht = 28, rng = hi - lo || 1;
-  const pts = v.map((y, i) => `${(i / (v.length - 1) * w).toFixed(1)},${(ht - 3 - (y - lo) / rng * (ht - 6)).toFixed(1)}`).join(' ');
-  const last = pts.split(' ').pop().split(',');
-  return `<svg width="${w}" height="${ht}" viewBox="0 0 ${w} ${ht}"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="${last[0]}" cy="${last[1]}" r="2.6" fill="var(--acc)"/></svg>`;
+  const pts = v.map((y, i) => `${(i / (v.length - 1) * w).toFixed(1)},${(ht - 3 - (y - lo) / rng * (ht - 6)).toFixed(1)}`).join(' '), last = pts.split(' ').pop().split(',');
+  return `<svg width="${w}" height="${ht}" viewBox="0 0 ${w} ${ht}" role="img" aria-label="Trend over time"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="${last[0]}" cy="${last[1]}" r="2.6" fill="var(--acc)"/></svg>`;
 }
-const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
 function techReport() {
-  const st = manipStats(), rows = TECH.filter(t => st[t.id + '-0'] || st[t.id + '-1']).map(t => { const a = [st[t.id + '-0'], st[t.id + '-1']].filter(Boolean), n = a.reduce((x, e) => x + e.n, 0), ok = a.reduce((x, e) => x + e.ok, 0); return { t, n, acc: Math.round(ok / n * 100) }; }).sort((a, b) => a.acc - b.acc);
-  if (!rows.length) return '<h2>Spotting manipulation</h2><p class="sub">No attempts yet. Do the daily session to start tracking which techniques you recognise.</p>';
-  return `<h2>Spotting manipulation</h2><p class="sub">${rows.length} of ${TECH.length} techniques seen. Weakest first: your next practice picks these more often.</p><table><tr><th>Technique</th><th>Seen</th><th>Correct</th></tr>${rows.map(r => `<tr><td>${esc(r.t.name)}</td><td>${r.n}</td><td style="color:${r.acc >= 70 ? 'var(--good)' : r.acc < 50 ? 'var(--acc)' : 'var(--mute)'}">${r.acc}%</td></tr>`).join('')}</table>`;
+  const st = manipStats(), by = {}; Object.values(st).forEach(e => { const x = by[e.t] ||= { n: 0, ok: 0 }; x.n += e.n; x.ok += e.ok; });
+  const rows = TECH.filter(t => by[t.id]).map(t => ({ t, n: by[t.id].n, acc: Math.round(by[t.id].ok / by[t.id].n * 100) })).sort((a, b) => a.acc - b.acc);
+  const missed = Object.entries(st).filter(([, e]) => e.last === false).map(([id, e]) => ({ s: SCEN.find(x => x.id === id), e })).filter(x => x.s).sort((a, b) => b.e.date.localeCompare(a.e.date)).slice(0, 5);
+  if (!rows.length) return '<h2>Spotting manipulation</h2><p class="sub">No attempts yet. Finish a daily session to start tracking which techniques you recognise.</p>';
+  return `<h2>Spotting manipulation</h2><p class="sub">${rows.length} of ${TECH.length} techniques seen. Weakest first. These come up more often in your sessions.</p><div class="tscroll"><table><tr><th>Technique</th><th>Seen</th><th>Correct</th></tr>${rows.map(r => `<tr><td>${esc(r.t.name)}</td><td>${r.n}</td><td style="color:${r.acc >= 70 ? 'var(--good)' : r.acc < 50 ? 'var(--acc)' : 'var(--mute)'}">${r.acc}%</td></tr>`).join('')}</table></div>
+  ${missed.length ? `<h2>Situations to revisit</h2>${missed.map(({ s, e }) => `<details class="lib"><summary>${esc(s.text.slice(0, 90))}…</summary><p>${esc(s.text)}</p><p class="meta">You said: ${esc(e.chosen ? labelFor(e.chosen) : 'unknown')} · Correct: ${esc(labelFor(s.t))}</p><p>${esc(s.why)}</p></details>`).join('')}` : ''}`;
 }
+function ics() {
+  const d = today().replace(/-/g, ''), url = location.href.split('#')[0];
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Brain Gym//EN', 'BEGIN:VEVENT', `UID:braingym-${d}@local`, `DTSTAMP:${d}T000000Z`, `DTSTART:${d}T090000`, 'DTEND:' + d + 'T091500', 'RRULE:FREQ=DAILY', 'SUMMARY:Brain Gym session (10 min)', `DESCRIPTION:${url}`, `URL:${url}`, 'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Brain Gym', 'TRIGGER:PT0M', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+}
+const REC_H = ['id', 'timestamp', 'date', 'activity', 'score', 'detail'];
 function vReport(app) {
   const wk = off => { const days = Array.from({ length: 7 }, (_, i) => addDays(today(), -off * 7 - i)); return records.filter(r => days.includes(r.date)); };
-  const tw = wk(0), lw = wk(1);
+  const tw = wk(0), lw = wk(1), label = { up: 'Improving', down: 'Slipping', flat: 'Steady' };
   const rows = ACTS.filter(a => a.run || a.id === 'cards').map(a => {
-    const rs = records.filter(r => r.activity === a.id), sc = rs.map(r => +r.score);
-    let trend = null, pct = 0;
-    if (a.track && sc.length >= 4) { const f = avg(sc.slice(0, 3)), l = avg(sc.slice(-3)); pct = f ? (l - f) / f * 100 : 0; trend = pct >= 5 ? 'up' : pct <= -5 ? 'down' : 'flat'; }
-    let lvl = ''; const d = rs.length ? (() => { try { return JSON.parse(rs.at(-1).detail); } catch { return {}; } })() : {};
+    const rs = records.filter(r => r.activity === a.id), sc = rs.map(r => +r.score), series = a.track ? Logic.dailySeries(records, a.id) : [];
+    const { trend, pct } = a.track ? Logic.trendOf(series) : { trend: null, pct: 0 };
+    let lvl = '', d = {}; try { d = rs.length ? JSON.parse(rs.at(-1).detail) : {}; } catch { }
     if (a.id === 'nback' && d.n) lvl = `${d.n}-back`; if (a.id === 'math' && d.level) lvl = `level ${d.level}`;
-    return { a, rs, sc, trend, pct, lvl };
+    return { a, rs, sc, series, trend, pct, lvl };
   }).filter(r => r.rs.length || r.a.track);
   const up = rows.filter(r => r.trend === 'up').map(r => r.a.name), down = rows.filter(r => r.trend === 'down').map(r => r.a.name), ready = rows.filter(r => r.trend).length;
   const days = Array.from({ length: 14 }, (_, i) => addDays(today(), i - 13)), cnt = d => new Set(records.filter(r => r.date === d).map(r => r.activity)).size, max = Math.max(1, ...days.map(cnt));
-  const label = { up: 'Improving', down: 'Slipping', flat: 'Steady' };
   app.append(h(`<div><p class="eyebrow">Report</p><h1>Are you improving?</h1>
-  <p class="lede">${!records.length ? 'No data yet. Finish a session and come back.' : !ready ? 'Trends appear after 4 sessions of an exercise. Keep going; consistency comes first.' : `${up.length ? 'Improving: ' + up.join(', ') + '. ' : ''}${down.length ? 'Slipping: ' + down.join(', ') + '. ' : ''}${!up.length && !down.length ? 'Holding steady so far. That is normal early on.' : ''}`}</p>
-  <div class="figs"><div><b>${streak()}</b><span>day streak</span></div><div><b>${new Set(tw.map(r => r.date)).size}/7</b><span>days trained this week</span></div><div><b>${tw.length}</b><span>exercises this week</span><span style="display:block">${lw.length ? `last week ${lw.length}` : ''}</span></div><div><b>${new Set(records.map(r => r.date)).size}</b><span>days total</span></div></div>
+  <p class="lede">${!records.length ? 'No data yet. Finish a session and come back.' : !ready ? 'Trends appear once an exercise has 4 days of data. Consistency comes first.' : `${up.length ? 'Improving: ' + up.join(', ') + '. ' : ''}${down.length ? 'Slipping: ' + down.join(', ') + '. ' : ''}${!up.length && !down.length ? 'Holding steady so far, which is normal early on.' : ''}`}</p>
+  <div class="figs"><div><b>${streak()}</b><span>day streak</span></div><div><b>${new Set(tw.map(r => r.date)).size}/7</b><span>days trained this week</span></div><div><b>${tw.length}</b><span>exercises this week${lw.length ? `<br>last week ${lw.length}` : ''}</span></div><div><b>${new Set(records.map(r => r.date)).size}</b><span>days in total</span></div></div>
   <h2>Per exercise</h2>
-  <table><tr><th>Exercise</th><th>Runs</th><th>Best</th><th>Now</th><th>Trend</th><th></th></tr>${rows.map(r => `<tr><td>${r.a.name}${r.lvl ? `<br><span class="meta">${r.lvl}</span>` : ''}</td><td>${r.rs.length}</td><td>${r.sc.length ? Math.max(...r.sc) : '–'}</td><td>${r.sc.length ? r.sc.at(-1) : '–'}</td>
-    <td style="color:${r.trend === 'up' ? 'var(--good)' : r.trend === 'down' ? 'var(--acc)' : 'var(--mute)'}">${r.trend ? `${label[r.trend]} ${r.pct > 0 ? '+' : ''}${r.pct.toFixed(0)}%` : r.a.track ? `<span class="meta">needs ${Math.max(0, 4 - r.sc.length)} more</span>` : '<span class="meta">log only</span>'}</td><td style="color:var(--mute)">${spark(r.sc.slice(-20))}</td></tr>`).join('')}</table>
-  <p class="meta" style="margin-top:8px">Trend compares the average of your first 3 runs with your latest 3. Within ±5% counts as steady.</p>
+  <div class="tscroll"><table><tr><th>Exercise</th><th>Runs</th><th>Best</th><th>Latest</th><th>Trend</th><th></th></tr>${rows.map(r => `<tr><td>${r.a.name}${r.lvl ? `<br><span class="meta">${r.lvl}</span>` : ''}</td><td>${r.rs.length}</td><td>${r.sc.length ? Math.max(...r.sc) : '–'}</td><td>${r.sc.length ? r.sc.at(-1) : '–'}</td>
+    <td style="color:${r.trend === 'up' ? 'var(--good)' : r.trend === 'down' ? 'var(--acc)' : 'var(--mute)'}">${r.trend ? `${label[r.trend]} ${r.pct > 0 ? '+' : ''}${r.pct.toFixed(0)}%` : r.a.track ? `<span class="meta">needs ${Math.max(0, 4 - r.series.length)} more day${4 - r.series.length === 1 ? '' : 's'}</span>` : '<span class="meta">log only</span>'}</td><td style="color:var(--mute)">${spark(r.series.slice(-20))}</td></tr>`).join('')}</table></div>
+  <p class="meta" style="margin-top:8px">Trend compares your best day in the first 3 days with your best in the latest 3. Levels are folded in, so moving up a level counts as progress. Within 5% is steady.</p>
   ${techReport()}
-  <h2>Last 14 days</h2><div class="chart" style="margin-bottom:34px">${days.map(d => `<div style="height:${cnt(d) / max * 100}%" title="${d}: ${cnt(d)}"><span>${d.slice(8)}</span></div>`).join('')}</div>
-  <h2>Your data</h2><div class="row-btns" style="justify-content:flex-start"><button class="btn" id="ex">Download CSV</button><button class="btn ghost" id="imp">Import CSV</button><input type="file" id="fi" accept=".csv" hidden></div>
-  <p class="sub">${serverUp ? 'Also saved automatically in <code>data/records.csv</code>.' : 'Server not running, so data is in this browser only. Run <code>npm start</code> to also write CSV files.'}</p></div>`));
-  $('#ex').onclick = () => {
-    const q = v => { let s = String(v ?? ''); if (/^[=+\-@]/.test(s)) s = "'" + s; return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    const csv = 'id,timestamp,date,activity,score,detail\n' + records.map(r => [r.id, r.timestamp, r.date, r.activity, r.score, r.detail].map(q).join(',')).join('\n');
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `brain-gym-${today()}.csv`; a.click();
-  };
+  <h2>Last 14 days</h2><div class="chart" role="img" aria-label="Exercises completed per day, last 14 days">${days.map(d => `<div style="height:${cnt(d) / max * 100}%" title="${d}: ${cnt(d)}"><span>${d.slice(8)}</span></div>`).join('')}</div>
+  <h2 style="margin-top:44px">Your data</h2><div class="row-btns" style="justify-content:flex-start"><button class="btn" id="ex">Download CSV</button><button class="btn ghost" id="imp">Import CSV</button><button class="btn ghost" id="rem">Daily reminder (.ics)</button><input type="file" id="fi" accept=".csv" hidden></div>
+  <p class="sub" id="dmsg">${serverUp ? 'Also saved automatically in <code>data/records.csv</code>.' : isLocal ? 'Server offline: data is in this browser only. Run <code>npm start</code> to also write CSV files.' : 'Your data lives only in this browser. Download a CSV now and then as a backup.'}</p></div>`));
+  $('#ex').onclick = () => download(`brain-gym-${today()}.csv`, REC_H.join(',') + '\n' + records.map(r => Logic.csvLine(REC_H, r)).join(''));
+  $('#rem').onclick = () => download('brain-gym-reminder.ics', ics(), 'text/calendar');
   $('#imp').onclick = () => $('#fi').click();
   $('#fi').onchange = async e => {
-    const lines = (await e.target.files[0].text()).split('\n').slice(1).filter(Boolean); let added = 0; const ids = new Set(records.map(r => r.id));
-    lines.forEach(l => { const m = l.match(/("([^"]|"")*"|[^,]*)(,|$)/g)?.map(x => x.replace(/,$/, '').replace(/^"|"$/g, '').replace(/""/g, '"')); if (m && m.length >= 5 && !ids.has(m[0])) { records.push({ id: m[0], timestamp: m[1], date: m[2], activity: m[3], score: +m[4], detail: m[5] || '{}' }); added++; } });
-    save(K.rec, records); if (serverUp) post('/api/records', records); alert(`Imported ${added} new rows`); show('report');
+    const f = e.target.files[0]; if (!f) return;
+    const ids = new Set(records.map(r => r.id)), known = new Set(ACTS.map(a => a.id)); let added = 0, bad = 0;
+    Logic.parseCsv(await f.text()).forEach(r => {
+      if (!r.id || !/^\d{4}-\d\d-\d\d$/.test(r.date) || !known.has(r.activity) || !isFinite(+r.score)) { bad++; return; }
+      if (!ids.has(r.id)) { records.push({ id: r.id, timestamp: r.timestamp || r.date + 'T00:00:00Z', date: r.date, activity: r.activity, score: +r.score, detail: r.detail || '{}' }); ids.add(r.id); added++; }
+    });
+    records.sort((a, b) => a.timestamp.localeCompare(b.timestamp)); save(K.rec, records); if (serverUp) post('api/records', records);
+    e.target.value = ''; show('report'); $('#dmsg').textContent = `Imported ${added} new row${added === 1 ? '' : 's'}${bad ? `, skipped ${bad} invalid` : ''}.`;
   };
 }
 
-
 /* ---------- library ---------- */
-const CHALLENGES = ['Take a different route today and notice 5 new things.', 'Learn 5 words in a language you are curious about.', 'Draw (badly!) a diagram of something you understand.', 'Play one game of chess or solve a puzzle you have never tried.', 'Write with your non-dominant hand for 2 minutes.', 'Cook a recipe you have never made without looking at your phone mid-way.', 'Ask someone an interesting question and listen for 10 minutes.', 'Read 10 pages of a book outside your usual topics.', 'Memorise a short poem or a 20-digit number using a memory palace.', 'Teach someone a concept you learned this week.', 'Go for a 30-minute walk with no podcast or music — let your mind wander.', 'Learn a card trick or a simple instrument riff.', 'Estimate the answers to 5 everyday numbers before googling them.'];
-const dailyChallenge = () => CHALLENGES[[...today()].reduce((s, c) => s + c.charCodeAt(0), 0) % CHALLENGES.length];
 const LIB = [
-  ['Influence & manipulation (defensive)', 'Influence — Robert Cialdini · The Gaslight Effect — Robin Stern · Thinking, Fast and Slow — Kahneman', 'Knowing the named patterns (reciprocity, scarcity, DARVO, gaslighting...) lets you notice them in the moment, and a named pattern is much easier to counter.', 'Technique of the day, Spot the technique'],
-  ['Retrieval practice & spaced repetition', 'Make It Stick — Brown, Roediger & McDaniel · Ebbinghaus forgetting curve', 'Testing yourself beats re-reading. Spacing reviews over days multiplies retention.', 'Flashcards'],
-  ['Method of Loci (Memory Palace)', 'Moonwalking with Einstein — Joshua Foer · Ancient Greek orators', 'Anchor items to places on a familiar route using vivid, absurd images. Memory champions use it.', 'Memory Palace'],
-  ['Feynman Technique', 'Surely You\'re Joking, Mr. Feynman! · A Mind for Numbers — Barbara Oakley', 'Explain it simply, find the gaps, go back and learn them. Reveals the illusion of understanding.', 'Feynman Journal'],
-  ['Working-memory training (Dual N-Back)', 'Jaeggi et al., 2008, PNAS', 'Trains holding & updating information. Evidence for transfer to general intelligence is mixed, but it reliably improves working-memory task skill and focus.', 'Dual N-Back'],
-  ['Inhibition & attention (Stroop)', 'Thinking, Fast and Slow — Daniel Kahneman · Stroop, 1935', 'Practises overriding automatic responses — the "System 2" effort.', 'Stroop Focus'],
-  ['Deliberate practice', 'Peak — Anders Ericsson', 'Work at the edge of your ability, get feedback, repeat. Why the games adapt their difficulty.', 'All adaptive games'],
-  ['Deep Work', 'Deep Work — Cal Newport', 'Protected, distraction-free blocks build focus like a muscle.', 'Brain habits'],
-  ['Habit design', 'Atomic Habits — James Clear', 'Make it obvious, easy, satisfying. Same time + same place + streak tracking.', 'Streak & daily plan'],
-  ['Exercise for the brain', 'Spark — John J. Ratey', 'Aerobic exercise raises BDNF and is among the best-supported ways to protect cognition.', 'Brain habits'],
-  ['Sleep', 'Why We Sleep — Matthew Walker (some claims debated; core point stands)', 'Sleep consolidates memories. No game compensates for chronic sleep loss.', 'Brain habits'],
-  ['Neuroplasticity & growth mindset', 'The Brain That Changes Itself — Norman Doidge · Mindset — Carol Dweck', 'Abilities change with effort; "not yet" beats "I can\'t".', 'Level-ups'],
-  ['Learning how to learn', 'Learning How to Learn — Oakley & Sejnowski · Limitless — Jim Kwik', 'Alternate focused and diffuse thinking; chunk ideas; sleep on it.', 'Curiosity challenge'],
-  ['Mindfulness & box breathing', 'Mindfulness-based stress reduction research (Kabat-Zinn)', 'Short breath practice reduces stress and improves attention control.', 'Box breathing'],
+  ['Why influence and manipulation is in here', 'Roozenbeek et al. 2022, Science Advances · Cialdini, Influence · Stern, The Gaslight Effect · Forward, Emotional Blackmail', 'Short "prebunking" lessons that name a manipulation technique, warn you it is coming, and show a harmless sample measurably improve people\'s ability to recognise it afterwards (about +5% on average in a 22,000-person field study). This module copies that format: learn the pattern, see it in context, say what you spotted and why. Fair requests are included on purpose, so you also learn what is NOT manipulation.', 'Technique of the day, Spot the technique'],
+  ['Retrieval practice and spaced repetition', 'Make It Stick, Brown, Roediger and McDaniel · Ebbinghaus forgetting curve', 'Testing yourself beats re-reading, and spreading reviews over days beats cramming. Meta-analyses find moderate-to-large benefits, with large variation between studies.', 'Flashcards, situation review'],
+  ['Method of loci (memory palace)', 'Moonwalking with Einstein, Joshua Foer', 'Anchor items to places on a familiar route using vivid, odd images. Reliable for memorising lists, which is what memory competitors use it for.', 'Memory Palace'],
+  ['Feynman technique', 'A Mind for Numbers, Barbara Oakley', 'Explain it simply, find the gaps, go back and fill them. Exposes the illusion of understanding.', 'Feynman Journal'],
+  ['Working-memory training (dual n-back): what the evidence says', 'Jaeggi et al. 2008 · Soveri et al. 2017 meta-analysis · Melby-Lervåg and Hulme', 'Practice makes you better at n-back, but meta-analyses find that the gain is mostly task-specific, and transfer to everyday reasoning is small to none against active control groups. Treat it as a focus warm-up, not a way to raise IQ.', 'Dual N-Back'],
+  ['Stroop and attention', 'Stroop, 1935', 'A classic measure of overriding an automatic response. Practice improves the task itself.', 'Stroop Focus'],
+  ['Deliberate practice', 'Peak, Anders Ericsson', 'Work at the edge of your ability with quick feedback. The reason the games adapt their difficulty.', 'Adaptive games'],
+  ['Deep work and habits', 'Deep Work, Cal Newport · Atomic Habits, James Clear', 'Protected, distraction-free blocks build focus. Same time, same place, low friction, visible streak.', 'Daily session, streak'],
+  ['Exercise and sleep', 'Spark, John Ratey · sleep-consolidation research', 'Aerobic exercise shows modest, consistent cognitive benefits in meta-analyses (around 0.3 standard deviations in adults over 50), and sleep consolidates memory. No game makes up for chronic sleep loss.', 'Brain habits'],
+  ['Slow breathing', 'Slow-breathing and stress research', 'Slow, paced breathing reliably lowers arousal, which helps attention afterwards.', 'Box breathing'],
 ];
 function vLibrary(app) {
-  app.append(h(`<div><h1>Library</h1><p class="sub">The research and books behind each exercise.</p>
-  <div class="note"><b>Honest take:</b> "brain training" games mostly make you better at the games themselves; far transfer is modest. What's best evidenced for sharper thinking is <b>exercise, sleep, retrieval practice, learning genuinely new hard things</b>, and social engagement. That's why this app mixes games with study techniques and habits — and adds a daily curiosity challenge.</div>
-  ${LIB.map(l => `<div class="lib"><h3>${esc(l[0])}</h3><p class="sub" style="margin:0 0 6px">${esc(l[1])}</p><p style="margin:0 0 6px">${esc(l[2])}</p><span class="chip">In app: ${esc(l[3])}</span></div>`).join('')}</div>`));
+  const ex = records.filter(r => r.activity === 'lesson').map(r => { let d = {}; try { d = JSON.parse(r.detail); } catch { } return { r, d, t: techById(d.tech) }; }).filter(x => x.t && x.d.text).reverse();
+  app.append(h(`<div><p class="eyebrow">Library</p><h1>Techniques and research</h1>
+  <div class="note"><b>The honest summary.</b> Brain-training games mostly make you better at the games. What is best supported for sharper thinking is exercise, sleep, retrieval practice, and learning genuinely new, hard things. This app mixes all of those on purpose.</div>
+  <h2>All ${TECH.length} techniques</h2><p class="sub">Tap one to read how to spot it and counter it.</p>
+  ${TECH.map(t => `<details class="lib"><summary><b>${esc(t.name)}</b></summary><p class="meta">${esc(t.src)}</p><p>${esc(t.def)}</p><p><b>Spot it:</b> ${t.signs.map(esc).join(' · ')}</p><p><b>Counter:</b> ${esc(t.counter)}</p></details>`).join('')}
+  ${ex.length ? `<h2>Your own examples</h2>${ex.map(x => `<div class="lib"><p class="meta">${x.r.date} · ${esc(x.t.name)}</p><p>${esc(x.d.text)}</p></div>`).join('')}` : ''}
+  <h2>Research behind the exercises</h2>
+  ${LIB.map(l => `<div class="lib"><h3>${esc(l[0])}</h3><p class="meta">${esc(l[1])}</p><p>${esc(l[2])}</p><span class="chip">In app: ${esc(l[3])}</span></div>`).join('')}</div>`));
 }
 
-boot();
+setSync(); show('today');
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => { });
+probe();

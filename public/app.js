@@ -55,6 +55,7 @@ async function probe() { // optional local server (npm start): short timeout, mu
 /* ---------- activities ---------- */
 const ACTS = [
   { id: 'breathe', cat: 'Calm', track: false, name: 'Box breathing', min: 1, tag: 'Calm and focus', desc: 'Sixty seconds of 4-4-4-4 breathing to settle before you work.', run: gBreathe, unit: 's' },
+  { id: 'ias', cat: 'Answer writing', track: true, name: 'Answer writing', min: 8, tag: 'UPSC Mains style · Subjective', desc: 'Two rotating Mains-style questions (ethics case study, governance, essay). Write the answer, then mark it against the model points.', run: gIas, unit: '/100' },
   { id: 'lesson', cat: 'Influence', track: false, name: 'Technique of the day', min: 1, tag: 'Influence · Learn', desc: 'One manipulation or persuasion technique: how it works, how to spot it, how to counter it.', run: gLesson, unit: ' words' },
   { id: 'manip', cat: 'Influence', track: true, name: 'Spot the technique', min: 3, tag: 'Influence · Reasoning', desc: 'Read a real-life situation, name the technique (or call it fair), and explain your reasoning.', run: gManip, unit: '/100' },
   { id: 'nback', cat: 'Memory', track: true, name: 'Dual N-Back', min: 3, tag: 'Working memory', desc: 'Track a position and a letter from N steps ago. The level adapts to you.', run: gNback, unit: '/100' },
@@ -67,8 +68,8 @@ const ACTS = [
   { id: 'cards', cat: 'Learning', track: false, name: 'Flashcards', min: 3, tag: 'Spaced repetition', desc: 'Review the cards due today.', run: null, unit: ' cards' },
   { id: 'habits', cat: 'Habits', track: false, name: 'Brain habits', min: 1, tag: 'Sleep · Exercise · Reading', desc: 'Log the daily basics that matter more than any game.', run: gHabits, unit: '/6' },
 ];
-const DAILY = ['breathe', 'lesson', 'manip', 'nback', 'stroop', 'math'];
-const CATS = ['Influence', 'Memory', 'Focus', 'Speed', 'Learning', 'Habits', 'Calm'];
+const DAILY = ['breathe', 'ias', 'nback', 'stroop'];
+const CATS = ['Answer writing', 'Influence', 'Memory', 'Focus', 'Speed', 'Learning', 'Habits', 'Calm'];
 const actById = id => ACTS.find(a => a.id === id);
 const doneToday = id => records.some(r => r.activity === id && r.date === today() && !String(r.detail).includes('"partial":true'));
 const streak = () => Logic.streakOf(records, today());
@@ -105,7 +106,7 @@ function vToday(app) {
   const cl = $('#cl'); if (cl) cl.onclick = e => { e.preventDefault(); show('cards'); };
 }
 
-let pickedCats = load(K.cats, ['Influence']);
+let pickedCats = load(K.cats, ['Answer writing']);
 function vPractice(app) {
   const games = () => ACTS.filter(a => a.run && pickedCats.includes(a.cat)), mins = () => games().reduce((x, a) => x + a.min, 0);
   app.append(h(`<div><p class="eyebrow">Extra reps</p><h1>Practice</h1><p class="sub">Pick one or more categories. Every exercise in them runs back to back.</p>

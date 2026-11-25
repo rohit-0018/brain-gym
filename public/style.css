@@ -90,3 +90,22 @@ select{background:transparent;color:var(--ink);border:0;border-bottom:1px solid 
 .chatform{margin-top:14px}.chatform input{flex:1}
 
 .aiout:empty{display:none}
+
+/* answer writing + lesson + stage header */
+.stage .top{display:grid;grid-template-columns:1fr auto auto;gap:16px;align-items:center}
+.stage .top .meta{font-size:12px}
+.ias{text-align:left;max-width:68ch}
+.ias h1{font-size:34px;margin:0 0 4px}.ias h2{font:600 11px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--mute);margin:0 0 8px}
+.ias .topic{font:600 13px var(--sans);color:var(--acc);margin:0 0 10px}
+.ias .qtext{font:20px/1.5 var(--serif);margin:0 0 20px}
+.ias .two{display:grid;grid-template-columns:1fr 1fr;gap:28px;border-top:1px solid var(--rule);padding-top:20px;margin-top:6px}
+.ias .two ul{margin:0;padding-left:18px}.ias .two li{margin:4px 0}.ias .two p{margin:0}
+.how{border:1px solid var(--rule);padding:10px 14px;margin:0 0 18px}.how summary{cursor:pointer;font:600 13px var(--sans);color:var(--mute)}.how ul{margin:10px 0 2px;padding-left:18px}.how li{margin:4px 0}
+.ias textarea{font:17px/1.6 var(--serif);min-height:180px}
+.wc{font:12px var(--mono);color:var(--mute);margin:4px 0 0}.wc.ok{color:var(--good)}.wc.over{color:var(--acc)}
+.pt{align-items:flex-start;font:16px/1.45 var(--serif)}.pt input{margin-top:4px;flex:none}
+.scorebar{display:flex;align-items:baseline;gap:8px;margin:18px 0}.scorebar b{font:400 52px/1 var(--serif);color:var(--acc)}.scorebar span{color:var(--mute)}
+.yours{white-space:pre-wrap;font:16px/1.55 var(--serif);margin:10px 0 2px}
+textarea:focus{box-shadow:none;border-color:var(--acc);outline:2px solid color-mix(in srgb,var(--acc) 35%,transparent);outline-offset:0}
+@media(max-width:600px){.ias .two{grid-template-columns:1fr}.stage .top{grid-template-columns:1fr auto}.stage .top .meta{display:none}}
+.stage .top span:first-child{text-align:left}

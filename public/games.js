@@ -203,14 +203,57 @@ function optionsFor(sc) {
 
 function gLesson(root, finish) {
   const $ = s => root.querySelector(s), t = techOfDay();
-  root.innerHTML = `<div style="text-align:left"><p class="eyebrow">Technique ${TECH.indexOf(t) + 1} of ${TECH.length} · ${esc(t.src)}</p><h1 style="font-size:36px">${esc(t.name)}</h1>
-  <p class="serif">${esc(t.def)}</p>
-  <h2 style="font-size:18px">How to spot it</h2><ul>${t.signs.map(x => `<li>${esc(x)}</li>`).join('')}</ul>
-  <h2 style="font-size:18px">How to counter it</h2><p>${esc(t.counter)}</p>
-  <div class="field"><label for="ex">Where have you seen or felt this? Ads, work, family, media. A sentence or two.</label><textarea id="ex" style="min-height:90px"></textarea></div>
+  root.innerHTML = `<div class="ias lesson"><p class="eyebrow">Technique ${TECH.indexOf(t) + 1} of ${TECH.length}</p><h1>${esc(t.name)}</h1><p class="meta">Source: ${esc(t.src)}</p>
+  <p class="qtext">${esc(t.def)}</p>
+  <div class="two"><div><h2>How to spot it</h2><ul>${t.signs.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div><div><h2>How to counter it</h2><p>${esc(t.counter)}</p></div></div>
+  <div class="field"><label for="ex">Your turn: where have you seen this? Ads, work, family, media.</label><textarea id="ex" rows="3" placeholder="One or two sentences."></textarea></div>
   <p class="err" role="alert"></p><div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="sv">Save and continue</button></div></div>`;
   $('#sv').onclick = () => { const x = $('#ex').value.trim(), n = x ? x.split(/\s+/).length : 0; if (n < 6) { $('.err').textContent = 'Write a short sentence. Linking it to real life is what makes it stick.'; return; } finish(n, { tech: t.id, text: x }, 'Saved. Tomorrow your first situation will test this technique, once you have had a night to forget it.'); };
-  $('#ex').focus();
+}
+
+/* ---------- UPSC-style answer writing ---------- */
+function gIas(root, finish, alive) {
+  const $ = s => root.querySelector(s);
+  const answered = records.filter(r => r.activity === 'ias').flatMap(r => { let d = {}; try { d = JSON.parse(r.detail); } catch { } return (Array.isArray(d.results) ? d.results : []).map(x => ({ id: x.id, day: Math.floor(new Date(r.date + 'T12:00:00') / 864e5) })); });
+  const picked = IAS.pickToday(IAS_BANK, IAS_ACTIVE, answered, dayNo(), 2); let i = 0, saved = false; const results = [];
+  const prev = cleanup;
+  cleanup = () => { if (!saved && results.length) { saved = true; addRecord('ias', Math.round(avg(results.map(r => r.pts))), { results, partial: true }); } prev(); };
+  const round = () => {
+    if (!alive()) return;
+    if (i >= picked.length) { saved = true; const sc = Math.round(avg(results.map(r => r.pts))); return finish(sc, { results }, `Self-marked against the model points. Rewrite the weakest answer from memory tomorrow.`); }
+    const q = picked[i];
+    root.innerHTML = `<div class="ias"><p class="eyebrow">Question ${i + 1} of ${picked.length} · ${esc(q.paper)} · ${q.marks} marks · ${q.words} words</p>
+      <p class="topic">${esc(q.topic)}</p><p class="qtext">${esc(q.q)}</p>
+      <details class="how"><summary>How to structure it</summary><ul>${q.dims.map(d => `<li>${esc(d)}</li>`).join('')}</ul></details>
+      <div class="field"><label for="ans">Your answer</label><textarea id="ans" rows="12" placeholder="Introduction, body, conclusion. Write it the way you would in the exam."></textarea><p class="wc" id="wc" aria-live="polite"></p></div>
+      <p class="err" role="alert"></p><div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="sub">Submit and mark myself</button></div></div>`;
+    const ta = $('#ans'), upd = () => { const st = IAS.limitState(IAS.words(ta.value), q.words), wc = $('#wc'); wc.textContent = st.msg; wc.className = 'wc ' + st.cls; };
+    ta.oninput = upd; upd();
+    $('#sub').onclick = () => {
+      const txt = ta.value.trim(), n = IAS.words(txt);
+      if (n < Math.min(40, q.words * .3)) { $('.err').textContent = `Write a proper answer first: at least ${Math.round(Math.min(40, q.words * .3))} words. The effort is the exercise.`; return; }
+      review(q, txt, n);
+    };
+  };
+  const review = (q, txt, n) => {
+    root.innerHTML = `<div class="ias" id="rv" tabindex="-1"><p class="eyebrow">Mark yourself · ${esc(q.paper)}</p><p class="topic">${esc(q.topic)}</p>
+      <p class="meta">Tick every point your answer actually made. Be honest: only what is on the page counts.</p>
+      <div id="pts">${q.pts.map((p, k) => `<label class="check pt"><input type="checkbox" data-k="${k}"><span>${esc(p)}</span></label>`).join('')}</div>
+      <div class="scorebar"><b id="sc">0</b><span>/100 · <span id="scm">0 of ${q.pts.length} points</span></span></div>
+      <details class="how"><summary>Read your own answer again</summary><p class="yours">${esc(txt)}</p></details>
+      <div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="nx">${i + 1 < picked.length ? 'Next question' : 'Finish'}</button>${AI.configured() ? '<button class="btn" id="ask">Get mentor feedback</button>' : ''}</div>
+      ${AI.configured() ? '' : '<p class="meta">Want an examiner\'s critique of the answer? Add an API key in the Coach tab (optional).</p>'}<div id="aiout" class="aiout" aria-live="polite"></div></div>`;
+    $('#rv').focus();
+    const tick = () => { const t = root.querySelectorAll('#pts input:checked').length, s = IAS.selfScore(t, q.pts.length, n, q.words); $('#sc').textContent = s; $('#scm').textContent = `${t} of ${q.pts.length} points`; return [t, s]; };
+    root.querySelectorAll('#pts input').forEach(c => c.onchange = tick);
+    $('#nx').onclick = () => { const [t, s] = tick(); results.push({ id: q.id, ticked: t, total: q.pts.length, pts: s, words: n, text: txt.slice(0, 1500) }); i++; round(); };
+    const ask = $('#ask'); if (ask) ask.onclick = async () => {
+      ask.disabled = true; const out = $('#aiout'); out.innerHTML = '<p class="meta">Reading your answer…</p>';
+      try { out.innerHTML = AI.mdToHtml(await AI.ask(AI.IAS_SYSTEM, [{ role: 'user', content: AI.iasPrompt({ paper: q.paper, marks: q.marks, wordLimit: q.words, question: q.q, modelPoints: q.pts, candidateAnswer: txt }) }], 600)); }
+      catch (e) { out.innerHTML = '<p class="err">' + esc(e.message) + '</p>'; ask.disabled = false; }
+    };
+  };
+  round();
 }
 
 function gManip(root, finish, alive) {

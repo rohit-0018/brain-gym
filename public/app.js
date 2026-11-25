@@ -181,6 +181,17 @@ function spark(v) {
   const pts = v.map((y, i) => `${(i / (v.length - 1) * w).toFixed(1)},${(ht - 3 - (y - lo) / rng * (ht - 6)).toFixed(1)}`).join(' '), last = pts.split(' ').pop().split(',');
   return `<svg width="${w}" height="${ht}" viewBox="0 0 ${w} ${ht}" role="img" aria-label="Trend over time"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="${last[0]}" cy="${last[1]}" r="2.6" fill="var(--acc)"/></svg>`;
 }
+const clip = (t, n) => t.length <= n ? t : t.slice(0, n).replace(/\s+\S*$/, '') + '…';
+function iasResults() { return records.filter(r => r.activity === 'ias').flatMap(r => { let d = {}; try { d = JSON.parse(r.detail); } catch { } return Array.isArray(d.results) ? d.results : []; }); }
+function upscReport() {
+  const res = iasResults(), subj = IAS.subjectStats(res);
+  if (!res.length) return '<h2>UPSC practice</h2><p class="sub">No answers yet. Finish today\'s UPSC practice to see your accuracy by subject.</p>';
+  const hist = iasHistory(), missed = Object.entries(hist).filter(([, e]) => !e.lastOk).map(([id]) => IAS_BANK.find(q => q.id === id)).filter(Boolean).slice(0, 6);
+  const ok = res.filter(x => x.pts >= 60).length;
+  return `<h2>UPSC practice</h2><p class="sub">${res.length} answered, ${Math.round(ok / res.length * 100)}% on target. Weakest subject first. Those come back more often.</p>
+  <div class="tscroll"><table><tr><th>Subject</th><th>Answered</th><th>On target</th></tr>${subj.map(r => `<tr><td>${esc(r.subject)}</td><td>${r.n}</td><td style="color:${r.pct >= 70 ? 'var(--good)' : r.pct < 50 ? 'var(--acc)' : 'var(--mute)'}">${r.pct}%</td></tr>`).join('')}</table></div>
+  ${missed.length ? `<h2>Missed, coming back tomorrow</h2>${missed.map(q => `<details class="lib"><summary>${esc(clip(q.q.split('\n')[0], 90))}</summary><p>${esc(q.q)}</p><p><b>${q.type === 'case' ? 'Best course' : 'Answer'}:</b> ${esc(q.type === 'case' ? q.opts[q.score.indexOf(Math.max(...q.score))] : q.opts[q.ans])}</p><p>${esc(q.type === 'case' ? q.why[q.score.indexOf(Math.max(...q.score))] : q.why)}</p></details>`).join('')}` : ''}`;
+}
 function techReport() { try { return techReportInner(); } catch { return '<h2>Spotting manipulation</h2><p class="sub">Some saved data could not be read. Use Reset data below if this persists.</p>'; } }
 function techReportInner() {
   const st = manipStats(), by = {}; Object.values(st).forEach(e => { const x = by[e.t] ||= { n: 0, ok: 0 }; x.n += e.n; x.ok += e.ok; });
@@ -215,6 +226,7 @@ function vReport(app) {
   <div class="tscroll"><table><tr><th>Exercise</th><th>Runs</th><th>Best</th><th>Latest</th><th>Trend</th><th></th></tr>${rows.map(r => `<tr><td>${r.a.name}${r.lvl ? `<br><span class="meta">${r.lvl}</span>` : ''}</td><td>${r.rs.length}</td><td>${r.sc.length ? Math.max(...r.sc) : '–'}</td><td>${r.sc.length ? r.sc.at(-1) : '–'}</td>
     <td style="color:${r.trend === 'up' ? 'var(--good)' : r.trend === 'down' ? 'var(--acc)' : 'var(--mute)'}">${r.trend ? `${label[r.trend]} ${r.pct > 0 ? '+' : ''}${r.pct.toFixed(0)}%` : r.a.track ? `<span class="meta">needs ${Math.max(0, 4 - r.series.length)} more day${4 - r.series.length === 1 ? '' : 's'}</span>` : '<span class="meta">log only</span>'}</td><td style="color:var(--mute)">${spark(r.series.slice(-20))}</td></tr>`).join('')}</table></div>
   <p class="meta" style="margin-top:8px">Trend compares your best day in the first 3 days with your best in the latest 3. Levels are folded in, so moving up a level counts as progress. Within 5% is steady.</p>
+  ${upscReport()}
   ${techReport()}
   <h2>Last 14 days</h2><div class="chart" role="img" aria-label="Exercises completed per day, last 14 days">${days.map(d => `<div style="height:${cnt(d) / max * 100}%" title="${d}: ${cnt(d)}"><span>${d.slice(8)}</span></div>`).join('')}</div>
   <h2 style="margin-top:44px">Your data</h2><div class="row-btns" style="justify-content:flex-start"><button class="btn" id="ex">Download CSV</button><button class="btn ghost" id="imp">Import CSV</button><button class="btn ghost" id="rem">Daily reminder (.ics)</button><button class="btn ghost" id="rst">Reset data</button><input type="file" id="fi" accept=".csv" hidden></div>
@@ -237,7 +249,19 @@ function vReport(app) {
 
 /* ---------- coach ---------- */
 const nameOfId = id => id === 'fair' ? FAIR.short : techById(id) ? shortName(techById(id)) : String(id);
+function upscLines() {
+  const res = iasResults(), L = [];
+  if (res.length < 8) return L;
+  const subj = IAS.subjectStats(res).filter(x => x.n >= 3), cases = res.filter(x => x.type === 'case');
+  if (subj.length) { const w = subj[0]; L.push(`Weakest UPSC subject: <b>${esc(w.subject)}</b> at ${w.pct}% over ${w.n} answers.${subj.length > 1 && subj.at(-1).pct - w.pct >= 25 ? ` Strongest is ${esc(subj.at(-1).subject)} (${subj.at(-1).pct}%), so shift some reading time.` : ''}`); }
+  if (cases.length >= 3) { const a = Math.round(avg(cases.map(x => x.pts))); L.push(`Your Ethics case choices average ${a}/100. ${a < 60 ? 'You often pick the rule-bound or the quick-fix option. The best answers use proper process and protect the vulnerable person.' : 'Good instincts. Keep checking that you pick process over shortcuts.'}`); }
+  return L;
+}
 function insightLines(f) {
+  const all = [...upscLines(), ...(f.answers ? insightLines2(f) : [])];
+  return all.length ? all : ['Finish a few UPSC practice sessions and patterns will show up here.'];
+}
+function insightLines2(f) {
   if (f.answers < 6) return [`You have answered ${f.answers} situation${f.answers === 1 ? '' : 's'} so far. Patterns need about 6 or more, so keep going.`];
   const L = [`Overall you name the right technique ${f.accuracyPct}% of the time (${f.answers} answers).`];
   f.topConfusions.filter(c => c.actual !== FAIR.short && c.chosen !== FAIR.short).forEach(c => L.push(`You keep reading <b>${esc(c.actual)}</b> as <b>${esc(c.chosen)}</b> (${c.times}×). Look for the signal that separates them.`));
@@ -263,7 +287,7 @@ function vCoach(app) {
   const box = $('#ai');
   const privacy = `<p class="meta" style="margin-top:14px">Your key goes straight from this browser to the provider you pick. There is no server of mine in between, and it is never saved to the repo or included in CSV exports. By default it is kept for this tab only. What gets sent when you ask: the summary and missed situations shown above, with your own explanations. Journal entries and flashcards are never sent. A strict content-security policy blocks the page from contacting anything else.</p>`;
   if (!cfg) {
-    box.innerHTML = `<form id="kf" class="aiform"><p class="sub">Bring your own API key to get feedback like "you confused reciprocity with guilt-tripping because…" and a plan for what to fix. Usage is billed to your own account (a review costs a fraction of a cent to a few cents).</p>
+    box.innerHTML = `<form id="kf" class="aiform"><p class="sub">Bring your own API key to get feedback like "you keep missing Economy statement questions because…" and a plan for what to revise. Usage is billed to your own account (a review costs a fraction of a cent to a few cents).</p>
     <div class="field"><label for="prov">Provider</label><select id="prov">${Object.entries(AI.PROVIDERS).map(([k, v]) => `<option value="${k}">${esc(v.name)}</option>`).join('')}</select></div>
     <div class="field"><label for="key">API key</label><input type="password" id="key" autocomplete="off" spellcheck="false" placeholder="sk-ant-…"></div>
     <div class="field"><label for="mdl">Model (editable)</label><input type="text" id="mdl" autocomplete="off" spellcheck="false"></div>
@@ -276,7 +300,7 @@ function vCoach(app) {
   box.innerHTML = `<p class="meta">Connected: ${esc(AI.PROVIDERS[cfg.provider].name)} · ${esc(cfg.model)} · ${cfg.remember ? 'remembered on this device' : 'this tab only'} <button class="btn ghost" id="rmk" style="margin-left:8px;padding:4px 10px">Remove key</button> <button class="btn ghost" id="tst" style="padding:4px 10px">Test key</button></p>
   <div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="a1">Review my week</button><button class="btn" id="a2">What is holding me back?</button><button class="btn ghost" id="a0" ${coachChat.length ? '' : 'hidden'}>Start over</button></div>
   <div id="log" class="chatlog" aria-live="polite"></div><p class="err" role="alert" id="aerr"></p>
-  <form id="cf" class="chatform"><label for="cq" class="meta">Ask a follow-up</label><div style="display:flex;gap:8px"><input type="text" id="cq" autocomplete="off" placeholder="e.g. Why do I mix up guilt-tripping and reciprocity?"><button class="btn primary" type="submit">Send</button></div></form>${privacy}`;
+  <form id="cf" class="chatform"><label for="cq" class="meta">Ask a follow-up</label><div style="display:flex;gap:8px"><input type="text" id="cq" autocomplete="off" placeholder="e.g. How should I revise Polity?"><button class="btn primary" type="submit">Send</button></div></form>${privacy}`;
   const log = $('#log', box), err = $('#aerr', box);
   const draw = (pending) => { log.innerHTML = coachChat.map(m => m.role === 'user' ? `<div class="bubble me">${esc(m.label || m.content).slice(0, 600)}</div>` : `<div class="bubble ai">${AI.mdToHtml(m.content)}</div>`).join('') + (pending ? '<div class="bubble ai meta">Thinking…</div>' : ''); };
   const busy = on => box.querySelectorAll('button').forEach(b => { if (b.id !== 'rmk') b.disabled = on; });
@@ -286,7 +310,7 @@ function vCoach(app) {
     catch (e) { coachChat.pop(); err.textContent = e.message; }
     draw(false); busy(false); $('#a0', box).hidden = !coachChat.length;
   }
-  const review = (q, label) => send(AI.reviewPrompt(f, missedForCoach(), q), label);
+  const review = (q, label) => send(AI.reviewPrompt({ ...f, upscBySubject: IAS.subjectStats(iasResults()).map(x => ({ subject: x.subject, answered: x.n, onTargetPct: x.pct })) }, missedForCoach(), q), label);
   $('#a1', box).onclick = () => review('Review my week: what am I doing well, what went wrong, and what should I do next week?', 'Review my week');
   $('#a2', box).onclick = () => review('What is holding me back from improving? Name the most important patterns and one small action for each.', 'What is holding me back?');
   $('#a0', box).onclick = () => { coachChat = []; draw(false); $('#a0', box).hidden = true; };
@@ -298,6 +322,8 @@ function vCoach(app) {
 
 /* ---------- library ---------- */
 const LIB = [
+  ['How the UPSC practice picks your questions', 'Leitner system · Ebbinghaus forgetting curve · Make It Stick', 'Missed questions return the next day and correct ones after a week, which spaces reviews at the point you are about to forget. Subjects are interleaved, which feels harder but improves retention over blocked practice. Difficulty follows your accuracy so you stay in the productive range, not bored or lost.', 'UPSC practice'],
+  ['Ethics cases: how the options are scored', 'UPSC GS-IV syllabus · Nolan principles · conduct rules for All India Services', 'There is rarely one perfect answer, but there is a best one: it respects the law and due process, protects the vulnerable, documents decisions, and uses legitimate escalation. Options that skip process (even with good intent), or that give in to pressure, score low.', 'UPSC practice'],
   ['Why influence and manipulation is in here', 'Roozenbeek et al. 2022, Science Advances · Cialdini, Influence · Stern, The Gaslight Effect · Forward, Emotional Blackmail', 'Short "prebunking" lessons that name a manipulation technique, warn you it is coming, and show a harmless sample measurably improve people\'s ability to recognise it afterwards (about +5% on average in a 22,000-person field study). This module copies that format: learn the pattern, see it in context, say what you spotted and why. Fair requests are included on purpose, so you also learn what is NOT manipulation.', 'Technique of the day, Spot the technique'],
   ['Retrieval practice and spaced repetition', 'Make It Stick, Brown, Roediger and McDaniel · Ebbinghaus forgetting curve', 'Testing yourself beats re-reading, and spreading reviews over days beats cramming. Meta-analyses find moderate-to-large benefits, with large variation between studies.', 'Flashcards, situation review'],
   ['Method of loci (memory palace)', 'Moonwalking with Einstein, Joshua Foer', 'Anchor items to places on a familiar route using vivid, odd images. Reliable for memorising lists, which is what memory competitors use it for.', 'Memory Palace'],

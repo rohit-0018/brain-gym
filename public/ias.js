@@ -67,5 +67,11 @@
     if (wordCount <= limit * 1.15) return { cls: 'ok', msg: `${wordCount} words. Right on target.` };
     return { cls: 'over', msg: `${wordCount} words. Over the limit of ${limit}, so tighten it.` };
   }
-  return { words, pickToday, pickSession, selfScore, limitState };
+  /* Per-subject accuracy from stored session results (pts >= 60 counts as on target). Weakest first. */
+  function subjectStats(results) {
+    const by = {};
+    (results || []).forEach(x => { if (!x || !x.subject) return; const e = by[x.subject] ||= { subject: x.subject, n: 0, ok: 0 }; e.n++; e.ok += x.pts >= 60 ? 1 : 0; });
+    return Object.values(by).map(e => ({ ...e, pct: Math.round(e.ok / e.n * 100) })).sort((a, b) => a.pct - b.pct || b.n - a.n);
+  }
+  return { subjectStats, words, pickToday, pickSession, selfScore, limitState };
 });

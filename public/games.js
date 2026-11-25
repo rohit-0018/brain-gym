@@ -211,13 +211,66 @@ function gLesson(root, finish) {
   $('#sv').onclick = () => { const x = $('#ex').value.trim(), n = x ? x.split(/\s+/).length : 0; if (n < 6) { $('.err').textContent = 'Write a short sentence. Linking it to real life is what makes it stick.'; return; } finish(n, { tech: t.id, text: x }, 'Saved. Tomorrow your first situation will test this technique, once you have had a night to forget it.'); };
 }
 
-/* ---------- UPSC-style answer writing ---------- */
+/* ---------- UPSC practice: tap-to-answer Prelims MCQs + Ethics case choices ---------- */
+function iasHistory() {
+  const h = {};
+  records.filter(r => r.activity === 'ias').forEach(r => { let d = {}; try { d = JSON.parse(r.detail); } catch { } const day = Math.floor(new Date(r.date + 'T12:00:00') / 864e5);
+    (Array.isArray(d.results) ? d.results : []).forEach(x => { if (!x || !x.id) return; const e = h[x.id] ||= { n: 0, ok: 0, last: -1, lastOk: false }; e.n++; e.ok += x.pts >= 60 ? 1 : 0; if (day >= e.last) { e.last = day; e.lastOk = x.pts >= 60; } }); });
+  return h;
+}
 function gIas(root, finish, alive) {
+  const $ = s => root.querySelector(s), hist = iasHistory(), picked = IAS.pickSession(IAS_BANK, IAS_ACTIVE, hist, dayNo());
+  let i = 0, saved = false, keyH = null; const results = [], prev = cleanup;
+  cleanup = () => { if (keyH) document.removeEventListener('keydown', keyH); if (!saved && results.length) { saved = true; addRecord('ias', Math.round(avg(results.map(r => r.pts))), { results, partial: true }); } prev(); };
+  const subjects = [...new Set(picked.map(p => p.q.subject))];
+  root.innerHTML = `<div class="ias"><p class="eyebrow">Today's set</p><h1>${picked.length} questions</h1>
+    <p class="qtext">${picked.filter(p => p.q.type === 'mcq').length} Prelims-style questions and ${picked.filter(p => p.q.type === 'case').length} Ethics cases. Tap an option, check, learn the reason.</p>
+    <p class="chips">${subjects.map(x => `<span class="chip">${esc(x)}</span>`).join('')}</p>
+    <details class="how"><summary>How these were picked</summary><ul>
+      <li>Only the current batch of questions is used. Say "rotate questions" to swap in a new batch.</li>
+      <li>Questions you <b>missed</b> come back the next day. Ones you got right wait a week.</li>
+      <li>Never-seen questions come before ones that are not yet due.</li>
+      <li>Subjects are spread out, so you never get six Polity questions in a row.</li>
+      <li>Difficulty follows your accuracy: below 55% easier, above 75% harder.</li>
+      <li>Each question shows its reason tag, so you can see why it appeared.</li></ul></details>
+    <div class="row-btns" style="justify-content:flex-start"><button class="btn primary big-btn" id="go">Start</button></div></div>`;
+  $('#go').onclick = () => round();
+  const round = () => {
+    if (!alive()) return;
+    if (i >= picked.length) { saved = true; const sc = Math.round(avg(results.map(r => r.pts))), right = results.filter(r => r.pts >= 60).length; return finish(sc, { results }, `${right} of ${results.length} on target. Anything you missed returns tomorrow.`); }
+    const { q, reason } = picked[i], isCase = q.type === 'case';
+    const order = isCase ? shuffle(q.opts.map((_, k) => k)) : q.opts.map((_, k) => k); let chosen = null, locked = false;
+    const [stem, ...rest] = q.q.split('\n');
+    root.innerHTML = `<div class="ias"><p class="eyebrow">${i + 1} of ${picked.length} · ${esc(q.subject)} · ${esc(q.topic)}</p><p class="tag">${esc(reason)}${isCase ? ' · Ethics case' : ''}</p>
+      <p class="qtext" id="qt">${esc(stem)}</p>${rest.length ? `<p class="stmts">${rest.map(esc).join('<br>')}</p>` : ''}
+      <p class="eyebrow" id="q1">${isCase ? 'What would you do? Pick the best course of action' : 'Choose one (keys 1-4)'}</p><div id="op" role="radiogroup" aria-labelledby="q1" class="opts"></div>
+      <div id="fb"></div><p class="err" role="alert"></p><div class="row-btns" style="justify-content:flex-start"><button class="btn primary" id="chk">Check answer</button></div></div>`;
+    const btns = [];
+    const choose = k => { if (locked) return; chosen = k; btns.forEach((b, x) => { const on = x === k; b.classList.toggle('sel', on); b.setAttribute('aria-checked', on); }); };
+    order.forEach((oi, k) => { const b = h(`<button class="opt" role="radio" aria-checked="false"><span class="k">${k + 1}</span>${esc(q.opts[oi])}</button>`); b.onclick = () => choose(k); btns.push(b); $('#op').append(b); });
+    if (keyH) document.removeEventListener('keydown', keyH);
+    keyH = e => { if (e.ctrlKey || e.metaKey || e.altKey || /INPUT|TEXTAREA/.test(e.target.tagName)) return; const k = +e.key; if (k >= 1 && k <= btns.length) choose(k - 1); else if (e.key === 'Enter' && !locked && chosen != null && e.target.tagName !== 'BUTTON') $('#chk').click(); };
+    document.addEventListener('keydown', keyH);
+    $('#chk').onclick = () => {
+      if (locked) { i++; return round(); }
+      if (chosen == null) { $('.err').textContent = 'Pick an option first.'; return; }
+      locked = true; $('.err').textContent = ''; const picked_oi = order[chosen];
+      const pts = isCase ? q.score[picked_oi] : (picked_oi === q.ans ? 100 : 0);
+      results.push({ id: q.id, type: q.type, subject: q.subject, pick: picked_oi, pts });
+      btns.forEach((b, k) => { const oi = order[k]; b.disabled = true; const best = isCase ? q.score[oi] === Math.max(...q.score) : oi === q.ans; if (best) b.classList.add('right'); else if (k === chosen) b.classList.add('wrong'); if (isCase) b.insertAdjacentHTML('beforeend', `<span class="sc">${q.score[oi]}</span>`); });
+      $('#fb').innerHTML = `<div class="reveal ${pts >= 60 ? 'good' : 'bad'}"><b>${isCase ? `Your choice scores ${pts}/100` : pts ? 'Correct' : 'Not quite'}</b><p>${esc(isCase ? q.why[picked_oi] : q.why)}</p>${isCase && pts < 100 ? `<p class="meta">Best answer: ${esc(q.opts[q.score.indexOf(Math.max(...q.score))])}</p>` : ''}</div>`;
+      $('#chk').textContent = i + 1 < picked.length ? 'Next question' : 'Finish'; $('#chk').focus();
+    };
+  };
+}
+
+/* ---------- UPSC Mains-style written answers ---------- */
+function gMains(root, finish, alive) {
   const $ = s => root.querySelector(s);
-  const answered = records.filter(r => r.activity === 'ias').flatMap(r => { let d = {}; try { d = JSON.parse(r.detail); } catch { } return (Array.isArray(d.results) ? d.results : []).map(x => ({ id: x.id, day: Math.floor(new Date(r.date + 'T12:00:00') / 864e5) })); });
+  const answered = records.filter(r => r.activity === 'mains').flatMap(r => { let d = {}; try { d = JSON.parse(r.detail); } catch { } return (Array.isArray(d.results) ? d.results : []).map(x => ({ id: x.id, day: Math.floor(new Date(r.date + 'T12:00:00') / 864e5) })); });
   const picked = IAS.pickToday(IAS_BANK, IAS_ACTIVE, answered, dayNo(), 2); let i = 0, saved = false; const results = [];
   const prev = cleanup;
-  cleanup = () => { if (!saved && results.length) { saved = true; addRecord('ias', Math.round(avg(results.map(r => r.pts))), { results, partial: true }); } prev(); };
+  cleanup = () => { if (!saved && results.length) { saved = true; addRecord('mains', Math.round(avg(results.map(r => r.pts))), { results, partial: true }); } prev(); };
   const round = () => {
     if (!alive()) return;
     if (i >= picked.length) { saved = true; const sc = Math.round(avg(results.map(r => r.pts))); return finish(sc, { results }, `Self-marked against the model points. Rewrite the weakest answer from memory tomorrow.`); }
